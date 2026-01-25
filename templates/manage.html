@@ -24,6 +24,11 @@
                     </a>
                 </li>
                 <li class="nav-item">
+                    <a class="nav-link" href="/miners">
+                        <i class="bi bi-cpu me-2"></i>Miners
+                    </a>
+                </li>
+                <li class="nav-item">
                     <a class="nav-link active" href="/manage">
                         <i class="bi bi-sliders me-2"></i>Manage
                     </a>
@@ -71,57 +76,65 @@
                         </h5>
                     </div>
                     <div class="card-body">
-                        <!-- Control Inputs -->
-                        <div class="row align-items-end mb-4">
-                            <div class="col-md-6 mb-3 mb-md-0">
-                                <label class="form-label fw-semibold">Set Power (Watts)</label>
-                                <div class="input-group">
-                                    <input type="number" class="form-control" id="powerInput" min="0" value="3600" style="max-width: 150px;">
-                                    <span class="input-group-text">W</span>
+                        <!-- Miner Selection -->
+                        <div class="card bg-light mb-4">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <label class="form-label fw-semibold mb-0">
+                                        <i class="bi bi-check2-square me-1"></i>Select Miners
+                                    </label>
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-secondary" onclick="selectAllMiners()">
+                                            <i class="bi bi-check-all me-1"></i>Select All
+                                        </button>
+                                        <button class="btn btn-outline-secondary" onclick="deselectAllMiners()">
+                                            <i class="bi bi-x-lg me-1"></i>Deselect All
+                                        </button>
+                                    </div>
                                 </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="d-flex gap-2">
-                                    <button class="btn btn-primary" style="min-width: 120px;" onclick="applyPower()">
-                                        <i class="bi bi-lightning-charge me-1"></i>Apply
-                                    </button>
-                                    <button class="btn btn-success" style="min-width: 120px;" onclick="startMiners()">
-                                        <i class="bi bi-play-fill me-1"></i>Start
-                                    </button>
-                                    <button class="btn btn-danger" style="min-width: 120px;" onclick="shutdownMiners()">
-                                        <i class="bi bi-stop-fill me-1"></i>Shutdown
-                                    </button>
+                                <div class="row">
+                                    {{range $index, $machine := .Machines}}
+                                    <div class="col-md-4 col-sm-6 mb-2">
+                                        <div class="card bg-white">
+                                            <div class="card-body py-2 px-3">
+                                                <div class="form-check mb-0">
+                                                    <input class="form-check-input miner-checkbox" type="checkbox"
+                                                           id="select-{{$index}}"
+                                                           data-ip="{{$machine.IP}}"
+                                                           data-name="{{$machine.Name}}"
+                                                           data-index="{{$index}}"
+                                                           checked>
+                                                    <label class="form-check-label w-100" for="select-{{$index}}">
+                                                        <span class="fw-semibold">{{$machine.Name}}</span>
+                                                        <br><small class="text-muted">{{$machine.IP}}</small>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {{end}}
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Miner Selection -->
-                        <div class="border-top pt-3">
-                            <div class="d-flex justify-content-between align-items-center mb-3">
-                                <label class="form-label fw-semibold mb-0">Select Miners</label>
-                                <div class="btn-group btn-group-sm">
-                                    <button class="btn btn-outline-secondary" onclick="selectAllMiners()">Select All</button>
-                                    <button class="btn btn-outline-secondary" onclick="deselectAllMiners()">Deselect All</button>
+                        <!-- Control Inputs -->
+                        <div class="d-flex flex-wrap align-items-end gap-3">
+                            <div>
+                                <label class="form-label fw-semibold">Set Power</label>
+                                <div class="input-group">
+                                    <input type="number" class="form-control" id="powerInput" min="0" value="3600" style="width: 120px;">
+                                    <span class="input-group-text">W</span>
                                 </div>
                             </div>
-                            <div class="row">
-                                {{range $index, $machine := .Machines}}
-                                <div class="col-md-4 col-sm-6 mb-2">
-                                    <div class="form-check">
-                                        <input class="form-check-input miner-checkbox" type="checkbox"
-                                               id="select-{{$index}}"
-                                               data-ip="{{$machine.IP}}"
-                                               data-name="{{$machine.Name}}"
-                                               data-index="{{$index}}"
-                                               checked>
-                                        <label class="form-check-label" for="select-{{$index}}">
-                                            <span class="fw-semibold">{{$machine.Name}}</span>
-                                            <small class="text-muted ms-1">({{$machine.IP}})</small>
-                                        </label>
-                                    </div>
-                                </div>
-                                {{end}}
-                            </div>
+                            <button class="btn btn-primary" onclick="applyPower()">
+                                <i class="bi bi-lightning-charge me-1"></i>Apply Power
+                            </button>
+                            <button class="btn btn-success" onclick="startMiners()">
+                                <i class="bi bi-play-fill me-1"></i>Start
+                            </button>
+                            <button class="btn btn-danger" onclick="shutdownMiners()">
+                                <i class="bi bi-stop-fill me-1"></i>Shutdown
+                            </button>
                         </div>
                     </div>
                 </div>

@@ -29,6 +29,7 @@ func main() {
 
 	// Dashboard route
 	r.GET("/", dashboardHandler)
+	r.GET("/miners", minersHandler)
 	r.GET("/manage", manageHandler)
 
 	// API routes for dashboard data (placeholder for future queries)
@@ -99,6 +100,22 @@ func getChartsHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Chart data will be provided via queries",
 	})
+}
+
+func minersHandler(c *gin.Context) {
+	data := gin.H{
+		"Title":    "Mining Dashboard",
+		"Machines": cfg.Machines,
+		"Metrics": []gin.H{
+			{"Label": "Total Hashrate", "Value": "375.5", "Unit": "MH/s", "Color": "primary"},
+			{"Label": "Active Miners", "Value": "3", "Unit": "online", "Color": "success"},
+			{"Label": "Total Power", "Value": "2550", "Unit": "W", "Color": "warning"},
+			{"Label": "Avg Temperature", "Value": "67", "Unit": "°C", "Color": "danger"},
+			{"Label": "Efficiency", "Value": "0.147", "Unit": "MH/W", "Color": "info"},
+			{"Label": "Uptime", "Value": "99.8", "Unit": "%", "Color": "secondary"},
+		},
+	}
+	c.HTML(http.StatusOK, "miners.html", data)
 }
 
 func manageHandler(c *gin.Context) {
