@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}}</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <!-- Custom CSS -->
+    <link href="/static/css/dashboard.css" rel="stylesheet">
+</head>
+<body>
+    <div class="wrapper">
+        <!-- Sidebar -->
+        <nav id="sidebar" class="bg-dark">
+            <div class="sidebar-header p-3">
+                <h4 class="text-white mb-0">
+                    <i class="bi bi-speedometer2 me-2"></i>Dashboard
+                </h4>
+            </div>
+            <ul class="nav flex-column p-3">
+                <li class="nav-item">
+                    <a class="nav-link active" href="/">
+                        <i class="bi bi-house-door me-2"></i>Overview
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/manage">
+                        <i class="bi bi-sliders me-2"></i>Manage
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#">
+                        <i class="bi bi-graph-up me-2"></i>Analytics
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#">
+                        <i class="bi bi-gear me-2"></i>Settings
+                    </a>
+                </li>
+            </ul>
+        </nav>
+
+        <!-- Page Content -->
+        <div id="content">
+            <!-- Top Navbar -->
+            <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm mb-4">
+                <div class="container-fluid">
+                    <button type="button" id="sidebarCollapse" class="btn btn-dark">
+                        <i class="bi bi-list"></i>
+                    </button>
+                    <span class="navbar-text ms-3">
+                        {{.Title}}
+                    </span>
+                    <div class="ms-auto">
+                        <span class="badge bg-secondary">
+                            <i class="bi bi-clock me-1"></i>
+                            <span id="currentTime"></span>
+                        </span>
+                    </div>
+                </div>
+            </nav>
+
+            <!-- Main Content -->
+            <div class="container-fluid">
+                <!-- Status and Gauges Box -->
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0">
+                            <i class="bi bi-activity me-2"></i>System Overview
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row align-items-center">
+                            <!-- Status Indicator -->
+                            <div class="col-lg-2 col-md-4 col-sm-6 mb-3 mb-lg-0">
+                                <div class="status-box text-center p-3 rounded {{if .Status.Online}}status-online{{else}}status-offline{{end}}">
+                                    <div class="status-indicator mb-2">
+                                        <span class="status-dot {{if .Status.Online}}online{{else}}offline{{end}}"></span>
+                                    </div>
+                                    <div class="status-label fw-semibold">{{.Status.Label}}</div>
+                                    <div class="status-value">
+                                        {{if .Status.Online}}Online{{else}}Offline{{end}}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Gauges -->
+                            {{range .Gauges}}
+                            <div class="col-lg-2 col-md-4 col-sm-6 mb-3 mb-lg-0">
+                                <div class="gauge-box text-center p-3 rounded bg-light">
+                                    <div class="gauge-label text-muted small mb-1">{{.Label}}</div>
+                                    <div class="gauge-value h4 mb-0 text-primary">{{.Value}}</div>
+                                    <div class="gauge-unit text-muted small">{{.Unit}}</div>
+                                </div>
+                            </div>
+                            {{end}}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Charts Grid 2x2 -->
+                <div class="row">
+                    <!-- Chart 1 -->
+                    <div class="col-lg-6 mb-4">
+                        <div class="card shadow-sm h-100">
+                            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                                <h6 class="mb-0">Chart 1</h6>
+                                <div class="dropdown">
+                                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                        Options
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end">
+                                        <li><a class="dropdown-item" href="#">Refresh</a></li>
+                                        <li><a class="dropdown-item" href="#">Export</a></li>
+                                    </ul>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="chart1"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Chart 2 -->
+                    <div class="col-lg-6 mb-4">
+                        <div class="card shadow-sm h-100">
+                            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                                <h6 class="mb-0">Chart 2</h6>
+                                <div class="dropdown">
+                                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                        Options
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end">
+                                        <li><a class="dropdown-item" href="#">Refresh</a></li>
+                                        <li><a class="dropdown-item" href="#">Export</a></li>
+                                    </ul>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="chart2"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Chart 3 -->
+                    <div class="col-lg-6 mb-4">
+                        <div class="card shadow-sm h-100">
+                            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                                <h6 class="mb-0">Chart 3</h6>
+                                <div class="dropdown">
+                                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                        Options
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end">
+                                        <li><a class="dropdown-item" href="#">Refresh</a></li>
+                                        <li><a class="dropdown-item" href="#">Export</a></li>
+                                    </ul>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="chart3"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Chart 4 -->
+                    <div class="col-lg-6 mb-4">
+                        <div class="card shadow-sm h-100">
+                            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                                <h6 class="mb-0">Chart 4</h6>
+                                <div class="dropdown">
+                                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                        Options
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end">
+                                        <li><a class="dropdown-item" href="#">Refresh</a></li>
+                                        <li><a class="dropdown-item" href="#">Export</a></li>
+                                    </ul>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="chart4"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap 5 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <!-- Custom JS -->
+    <script src="/static/js/dashboard.js"></script>
+</body>
+</html>
