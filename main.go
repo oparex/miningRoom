@@ -51,6 +51,7 @@ func main() {
 	// Dashboard route
 	r.GET("/", dashboardHandler)
 	r.GET("/miners", minersHandler)
+	r.GET("/power-mining", powerMiningHandler)
 	r.GET("/environment", environmentHandler)
 	r.GET("/manage", manageHandler)
 	r.GET("/settings", settingsHandler)
@@ -166,6 +167,25 @@ func settingsHandler(c *gin.Context) {
 		"Machines": machines,
 	}
 	c.HTML(http.StatusOK, "settings.html", data)
+}
+
+func powerMiningHandler(c *gin.Context) {
+	data := gin.H{
+		"Title":    "Mining Dashboard",
+		"Machines": machines,
+		"Status": gin.H{
+			"Online": true,
+			"Label":  "Mining Status",
+		},
+		"Gauges": []gin.H{
+			{"Label": "Total Power", "Value": 2510, "Unit": "W"},
+			{"Label": "Hashrate", "Value": 375.5, "Unit": "MH/s"},
+			{"Label": "Efficiency", "Value": 0.149, "Unit": "MH/W"},
+			{"Label": "Cost/Day", "Value": 6.02, "Unit": "$"},
+			{"Label": "Revenue/Day", "Value": 12.50, "Unit": "$"},
+		},
+	}
+	c.HTML(http.StatusOK, "power-mining.html", data)
 }
 
 // Machine management handlers

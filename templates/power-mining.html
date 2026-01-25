@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{.Title}} - Environment</title>
+    <title>{{.Title}} - Power & Mining</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
     <link href="/static/css/dashboard.css" rel="stylesheet">
@@ -29,12 +29,12 @@
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="/power-mining">
+                    <a class="nav-link active" href="/power-mining">
                         <i class="bi bi-lightning-charge me-2"></i>Power & Mining
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link active" href="/environment">
+                    <a class="nav-link" href="/environment">
                         <i class="bi bi-thermometer-half me-2"></i>Environment
                     </a>
                 </li>
@@ -60,7 +60,7 @@
                         <i class="bi bi-list"></i>
                     </button>
                     <span class="navbar-text ms-3">
-                        Environment
+                        Power & Mining
                     </span>
                     <div class="ms-auto">
                         <span class="badge bg-secondary">
@@ -73,13 +73,49 @@
 
             <!-- Main Content -->
             <div class="container-fluid">
+                <!-- Status and Gauges Box -->
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0">
+                            <i class="bi bi-lightning-charge me-2"></i>Power & Mining Overview
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row align-items-center">
+                            <!-- Status Indicator -->
+                            <div class="col-lg-2 col-md-4 col-sm-6 mb-3 mb-lg-0">
+                                <div class="status-box text-center p-3 rounded {{if .Status.Online}}status-online{{else}}status-offline{{end}}">
+                                    <div class="status-indicator mb-2">
+                                        <span class="status-dot {{if .Status.Online}}online{{else}}offline{{end}}"></span>
+                                    </div>
+                                    <div class="status-label fw-semibold">{{.Status.Label}}</div>
+                                    <div class="status-value">
+                                        {{if .Status.Online}}Online{{else}}Offline{{end}}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Gauges -->
+                            {{range .Gauges}}
+                            <div class="col-lg-2 col-md-4 col-sm-6 mb-3 mb-lg-0">
+                                <div class="gauge-box text-center p-3 rounded bg-light">
+                                    <div class="gauge-label text-muted small mb-1">{{.Label}}</div>
+                                    <div class="gauge-value h4 mb-0 text-primary">{{.Value}}</div>
+                                    <div class="gauge-unit text-muted small">{{.Unit}}</div>
+                                </div>
+                            </div>
+                            {{end}}
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Charts Grid 2x2 -->
                 <div class="row">
-                    <!-- Chart 1: Room Temperature -->
+                    <!-- Power Consumption Chart -->
                     <div class="col-lg-6 mb-4">
                         <div class="card shadow-sm h-100">
                             <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                                <h6 class="mb-0"><i class="bi bi-thermometer-half me-2"></i>Room Temperature</h6>
+                                <h6 class="mb-0"><i class="bi bi-plug me-2"></i>Power Consumption</h6>
                                 <div class="dropdown">
                                     <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
                                         Options
@@ -91,16 +127,16 @@
                                 </div>
                             </div>
                             <div class="card-body">
-                                <canvas id="tempChart"></canvas>
+                                <canvas id="powerConsumptionChart"></canvas>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Chart 2: Humidity -->
+                    <!-- Hashrate Chart -->
                     <div class="col-lg-6 mb-4">
                         <div class="card shadow-sm h-100">
                             <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                                <h6 class="mb-0"><i class="bi bi-droplet me-2"></i>Humidity</h6>
+                                <h6 class="mb-0"><i class="bi bi-graph-up-arrow me-2"></i>Hashrate</h6>
                                 <div class="dropdown">
                                     <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
                                         Options
@@ -112,16 +148,16 @@
                                 </div>
                             </div>
                             <div class="card-body">
-                                <canvas id="humidityChart"></canvas>
+                                <canvas id="hashrateChart"></canvas>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Chart 3: Air Pressure -->
+                    <!-- Efficiency Chart -->
                     <div class="col-lg-6 mb-4">
                         <div class="card shadow-sm h-100">
                             <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                                <h6 class="mb-0"><i class="bi bi-speedometer me-2"></i>Air Pressure</h6>
+                                <h6 class="mb-0"><i class="bi bi-speedometer me-2"></i>Mining Efficiency</h6>
                                 <div class="dropdown">
                                     <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
                                         Options
@@ -133,16 +169,16 @@
                                 </div>
                             </div>
                             <div class="card-body">
-                                <canvas id="pressureChart"></canvas>
+                                <canvas id="efficiencyChart"></canvas>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Chart 4: Air Quality -->
+                    <!-- Power per Miner Chart -->
                     <div class="col-lg-6 mb-4">
                         <div class="card shadow-sm h-100">
                             <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                                <h6 class="mb-0"><i class="bi bi-wind me-2"></i>Air Quality</h6>
+                                <h6 class="mb-0"><i class="bi bi-bar-chart me-2"></i>Power per Miner</h6>
                                 <div class="dropdown">
                                     <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
                                         Options
@@ -154,7 +190,7 @@
                                 </div>
                             </div>
                             <div class="card-body">
-                                <canvas id="airQualityChart"></canvas>
+                                <canvas id="powerPerMinerChart"></canvas>
                             </div>
                         </div>
                     </div>
@@ -178,84 +214,91 @@
         updateTime();
         setInterval(updateTime, 1000);
 
-        // Placeholder charts - will be replaced with real data
-        const chartConfig = {
+        // Sample chart data - will be replaced with real data
+        const timeLabels = ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '24:00'];
+
+        // Power Consumption Chart
+        new Chart(document.getElementById('powerConsumptionChart'), {
             type: 'line',
+            data: {
+                labels: timeLabels,
+                datasets: [{
+                    label: 'Power (W)',
+                    data: [2400, 2450, 2500, 2480, 2520, 2490, 2510],
+                    borderColor: 'rgb(255, 193, 7)',
+                    backgroundColor: 'rgba(255, 193, 7, 0.1)',
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false }
-                },
-                scales: {
-                    y: { beginAtZero: false }
-                }
-            }
-        };
-
-        const labels = ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '24:00'];
-
-        // Temperature Chart
-        new Chart(document.getElementById('tempChart'), {
-            ...chartConfig,
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Temperature',
-                    data: [22, 21, 20, 23, 26, 25, 23],
-                    borderColor: '#dc3545',
-                    backgroundColor: 'rgba(220, 53, 69, 0.1)',
-                    fill: true,
-                    tension: 0.4
-                }]
+                plugins: { legend: { display: false } }
             }
         });
 
-        // Humidity Chart
-        new Chart(document.getElementById('humidityChart'), {
-            ...chartConfig,
+        // Hashrate Chart
+        new Chart(document.getElementById('hashrateChart'), {
+            type: 'line',
             data: {
-                labels: labels,
+                labels: timeLabels,
                 datasets: [{
-                    label: 'Humidity',
-                    data: [45, 48, 52, 50, 42, 40, 44],
-                    borderColor: '#0dcaf0',
-                    backgroundColor: 'rgba(13, 202, 240, 0.1)',
+                    label: 'Hashrate (MH/s)',
+                    data: [370, 375, 380, 372, 378, 376, 375],
+                    borderColor: 'rgb(13, 110, 253)',
+                    backgroundColor: 'rgba(13, 110, 253, 0.1)',
                     fill: true,
                     tension: 0.4
                 }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } }
             }
         });
 
-        // Pressure Chart
-        new Chart(document.getElementById('pressureChart'), {
-            ...chartConfig,
+        // Efficiency Chart
+        new Chart(document.getElementById('efficiencyChart'), {
+            type: 'line',
             data: {
-                labels: labels,
+                labels: timeLabels,
                 datasets: [{
-                    label: 'Pressure',
-                    data: [1013, 1012, 1011, 1010, 1012, 1014, 1015],
-                    borderColor: '#6f42c1',
-                    backgroundColor: 'rgba(111, 66, 193, 0.1)',
-                    fill: true,
-                    tension: 0.4
-                }]
-            }
-        });
-
-        // Air Quality Chart
-        new Chart(document.getElementById('airQualityChart'), {
-            ...chartConfig,
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'AQI',
-                    data: [35, 38, 42, 45, 40, 36, 34],
-                    borderColor: '#198754',
+                    label: 'Efficiency (MH/W)',
+                    data: [0.154, 0.153, 0.152, 0.150, 0.150, 0.151, 0.149],
+                    borderColor: 'rgb(25, 135, 84)',
                     backgroundColor: 'rgba(25, 135, 84, 0.1)',
                     fill: true,
                     tension: 0.4
                 }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } }
+            }
+        });
+
+        // Power per Miner Chart
+        new Chart(document.getElementById('powerPerMinerChart'), {
+            type: 'bar',
+            data: {
+                labels: ['Rig-01', 'Rig-02', 'Rig-03'],
+                datasets: [{
+                    label: 'Power (W)',
+                    data: [850, 820, 840],
+                    backgroundColor: [
+                        'rgba(255, 193, 7, 0.8)',
+                        'rgba(13, 110, 253, 0.8)',
+                        'rgba(25, 135, 84, 0.8)'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } }
             }
         });
     </script>
