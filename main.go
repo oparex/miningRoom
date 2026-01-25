@@ -1,23 +1,44 @@
 package main
 
 import (
+	"flag"
 	"log"
 	"net/http"
 
-	"miningRoom/config"
+	"miningRoom/db"
 
 	"github.com/gin-gonic/gin"
 )
 
-var cfg *config.Config
+var (
+	machines []db.Machine
+	database *db.DB
+)
 
 func main() {
+	dbPath := flag.String("db-path", "miningroom.db", "SQLite database path")
+	questdbHost := flag.String("questdb-host", "localhost", "QuestDB host for metrics")
+	questdbPort := flag.Int("questdb-port", 9000, "QuestDB port")
+	flag.Parse()
+
+	log.Printf("Using QuestDB at %s:%d", *questdbHost, *questdbPort)
+
 	var err error
-	cfg, err = config.Load("config.yaml")
+	database, err = db.Open(*dbPath)
 	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
+		log.Fatalf("Failed to open database: %v", err)
 	}
-	log.Printf("Loaded %d mining machines from config", len(cfg.Machines))
+	defer database.Close()
+
+	if err := database.EnsureSchema(); err != nil {
+		log.Fatalf("Failed to ensure database schema: %v", err)
+	}
+
+	machines, err = database.FetchMachines()
+	if err != nil {
+		log.Fatalf("Failed to fetch machines: %v", err)
+	}
+	log.Printf("Loaded %d mining machines from database", len(machines))
 
 	r := gin.Default()
 
@@ -30,7 +51,9 @@ func main() {
 	// Dashboard route
 	r.GET("/", dashboardHandler)
 	r.GET("/miners", minersHandler)
+	r.GET("/environment", environmentHandler)
 	r.GET("/manage", manageHandler)
+	r.GET("/settings", settingsHandler)
 
 	// API routes for dashboard data (placeholder for future queries)
 	api := r.Group("/api")
@@ -48,6 +71,10 @@ func main() {
 		api.POST("/miners/power", setAllMinersPowerHandler)
 		api.POST("/miners/start", startAllMinersHandler)
 		api.POST("/miners/shutdown", shutdownAllMinersHandler)
+
+		// Machine management
+		api.POST("/machines", addMachineHandler)
+		api.DELETE("/machines/:ip", deleteMachineHandler)
 	}
 
 	r.Run(":8080")
@@ -57,7 +84,7 @@ func dashboardHandler(c *gin.Context) {
 	// Sample data - will be replaced with real queries later
 	data := gin.H{
 		"Title":    "Mining Dashboard",
-		"Machines": cfg.Machines,
+		"Machines": machines,
 		"Status": gin.H{
 			"Online": true,
 			"Label":  "System Status",
@@ -102,10 +129,17 @@ func getChartsHandler(c *gin.Context) {
 	})
 }
 
+func environmentHandler(c *gin.Context) {
+	data := gin.H{
+		"Title": "Mining Dashboard",
+	}
+	c.HTML(http.StatusOK, "environment.html", data)
+}
+
 func minersHandler(c *gin.Context) {
 	data := gin.H{
 		"Title":    "Mining Dashboard",
-		"Machines": cfg.Machines,
+		"Machines": machines,
 		"Metrics": []gin.H{
 			{"Label": "Total Hashrate", "Value": "375.5", "Unit": "MH/s", "Color": "primary"},
 			{"Label": "Active Miners", "Value": "3", "Unit": "online", "Color": "success"},
@@ -121,9 +155,77 @@ func minersHandler(c *gin.Context) {
 func manageHandler(c *gin.Context) {
 	data := gin.H{
 		"Title":    "Mining Dashboard",
-		"Machines": cfg.Machines,
+		"Machines": machines,
 	}
 	c.HTML(http.StatusOK, "manage.html", data)
+}
+
+func settingsHandler(c *gin.Context) {
+	data := gin.H{
+		"Title":    "Mining Dashboard",
+		"Machines": machines,
+	}
+	c.HTML(http.StatusOK, "settings.html", data)
+}
+
+// Machine management handlers
+
+type AddMachineRequest struct {
+	Name string `json:"name" binding:"required"`
+	IP   string `json:"ip" binding:"required"`
+}
+
+func addMachineHandler(c *gin.Context) {
+	var req AddMachineRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := database.AddMachine(req.Name, req.IP); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add machine"})
+		return
+	}
+
+	// Refresh machines list
+	var err error
+	machines, err = database.FetchMachines()
+	if err != nil {
+		log.Printf("Failed to refresh machines: %v", err)
+	}
+
+	log.Printf("Added machine %s (%s)", req.Name, req.IP)
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"name":    req.Name,
+		"ip":      req.IP,
+	})
+}
+
+func deleteMachineHandler(c *gin.Context) {
+	ip := c.Param("ip")
+	if ip == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "IP address required"})
+		return
+	}
+
+	if err := database.DeleteMachine(ip); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete machine"})
+		return
+	}
+
+	// Refresh machines list
+	var err error
+	machines, err = database.FetchMachines()
+	if err != nil {
+		log.Printf("Failed to refresh machines: %v", err)
+	}
+
+	log.Printf("Deleted machine with IP %s", ip)
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"ip":      ip,
+	})
 }
 
 // Individual miner control handlers
