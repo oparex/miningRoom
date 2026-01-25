@@ -12,7 +12,13 @@ type Machine struct {
 	IP   string `yaml:"ip"`
 }
 
+type QuestDB struct {
+	Host string `yaml:"host"`
+	Port int    `yaml:"port"`
+}
+
 type Config struct {
+	QuestDB  QuestDB   `yaml:"questdb"`
 	Machines []Machine `yaml:"machines"`
 }
 
