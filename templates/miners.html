@@ -73,19 +73,26 @@
 
             <!-- Main Content -->
             <div class="container-fluid">
-                <!-- Metrics Row -->
-                <div class="row mb-4">
-                    {{range .Metrics}}
-                    <div class="col-xl-2 col-lg-4 col-md-4 col-sm-6 mb-3">
-                        <div class="card shadow-sm h-100">
-                            <div class="card-body text-center">
-                                <div class="text-muted small mb-1">{{.Label}}</div>
-                                <div class="h3 mb-0 text-{{.Color}}">{{.Value}}</div>
-                                <div class="text-muted small">{{.Unit}}</div>
+                <!-- Miners Overview -->
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0">
+                            <i class="bi bi-cpu me-2"></i>Miners
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            {{range .Metrics}}
+                            <div class="col-xl-2 col-lg-4 col-md-4 col-sm-6 mb-3 mb-lg-0">
+                                <div class="gauge-box text-center p-3 rounded bg-light">
+                                    <div class="gauge-label text-muted small mb-1">{{.Label}}</div>
+                                    <div class="gauge-value h4 mb-0 text-{{.Color}}">{{.Value}}</div>
+                                    <div class="gauge-unit text-muted small">{{.Unit}}</div>
+                                </div>
                             </div>
+                            {{end}}
                         </div>
                     </div>
-                    {{end}}
                 </div>
 
                 <!-- Charts Grid 2x2 -->
