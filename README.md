@@ -50,7 +50,7 @@ Miners / Sensors → Mosquitto (MQTT) → Telegraf → QuestDB → Dashboard
 
 ### Telegraf Configuration
 
-Place your Telegraf configuration files in the `telegraf/` directory.
+Check the config file in `telegraf/` directory.
 
 ## Environment Sensors
 
