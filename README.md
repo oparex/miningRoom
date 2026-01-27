@@ -8,12 +8,15 @@ A mining rig monitoring dashboard built with Go/Gin backend and Bootstrap 5 fron
 - Power consumption and hashrate gauges
 - Historical charts for performance tracking
 - Individual and bulk miner control (power settings, start/shutdown)
+- Environment monitoring (temperature, humidity, pressure)
 - SQLite-based configuration with settings page for miner management
 
 ## Requirements
 
 - Go 1.21+
-- QuestDB (for metrics storage)
+- QuestDB (metrics storage)
+- Mosquitto (MQTT broker)
+- Telegraf (metrics collection)
 
 ## Installation
 
@@ -31,15 +34,34 @@ go build -o dashboard .
 
 ## Configuration
 
-Machines are defined in `config.yaml`:
+Miner configurations are stored in SQLite and managed through the settings page in the dashboard UI.
 
-```yaml
-machines:
-  - name: "Rig-01"
-    ip: "192.168.1.101"
-  - name: "Rig-02"
-    ip: "192.168.1.102"
+## Data Collection Stack
+
 ```
+Miners / Sensors → Mosquitto (MQTT) → Telegraf → QuestDB → Dashboard
+```
+
+### Components
+
+- **Mosquitto** - MQTT broker that receives data from miners and environment sensors
+- **Telegraf** - Collects metrics from MQTT and writes to QuestDB
+- **QuestDB** - Time-series database for storing historical metrics
+
+### Telegraf Configuration
+
+Place your Telegraf configuration files in the `telegraf/` directory.
+
+## Environment Sensors
+
+The dashboard integrates with ESP8266-based environment sensors running [esp8266-bme280](https://github.com/oparex/esp8266-bme280).
+
+These sensors use a BME280 module to measure:
+- Temperature (°C)
+- Relative humidity (%)
+- Atmospheric pressure (hPa)
+
+Data is published to the Mosquitto MQTT broker in JSON format, then collected by Telegraf and stored in QuestDB for visualization in the dashboard.
 
 ## Usage
 
@@ -80,7 +102,8 @@ Then open http://localhost:8080 in your browser.
 ├── templates/           # Go HTML templates
 │   ├── dashboard.html   # Main overview page
 │   └── manage.html      # Miner control page
-└── static/
-    ├── css/             # Custom styles
-    └── js/              # Chart.js and dashboard logic
+├── static/
+│   ├── css/             # Custom styles
+│   └── js/              # Chart.js and dashboard logic
+└── telegraf/            # Telegraf configuration files
 ```
