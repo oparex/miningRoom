@@ -22,42 +22,111 @@ const chartColors = {
     warningLight: 'rgba(255, 193, 7, 0.2)',
     danger: 'rgba(220, 53, 69, 1)',
     dangerLight: 'rgba(220, 53, 69, 0.2)',
+    info: 'rgba(13, 202, 240, 1)',
+    infoLight: 'rgba(13, 202, 240, 0.2)',
+    purple: 'rgba(111, 66, 193, 1)',
+    purpleLight: 'rgba(111, 66, 193, 0.2)',
 };
+
+// Color palette for dynamic datasets
+const colorPalette = [
+    { border: chartColors.primary, background: chartColors.primaryLight },
+    { border: chartColors.success, background: chartColors.successLight },
+    { border: chartColors.warning, background: chartColors.warningLight },
+    { border: chartColors.danger, background: chartColors.dangerLight },
+    { border: chartColors.info, background: chartColors.infoLight },
+    { border: chartColors.purple, background: chartColors.purpleLight },
+];
 
 // Sample labels for charts (will be replaced with real data)
 const sampleLabels = ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '24:00'];
 
-// Chart 1 - Line Chart (placeholder)
+// Chart 1 - Environment Temperature Chart
 const chart1Ctx = document.getElementById('chart1').getContext('2d');
-const chart1 = new Chart(chart1Ctx, {
+let chart1 = new Chart(chart1Ctx, {
     type: 'line',
     data: {
-        labels: sampleLabels,
-        datasets: [{
-            label: 'Dataset 1',
-            data: [65, 59, 80, 81, 56, 55, 72],
-            borderColor: chartColors.primary,
-            backgroundColor: chartColors.primaryLight,
-            fill: true,
-            tension: 0.4
-        }]
+        datasets: []
     },
     options: {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
             legend: {
-                display: true,
-                position: 'top'
+                display: false
+            },
+            title: {
+                display: false
             }
         },
         scales: {
+            x: {
+                type: 'time',
+                display: false
+            },
             y: {
-                beginAtZero: true
+                title: {
+                    display: true,
+                    text: '°C'
+                },
+                grace: '10%'
             }
         }
     }
 });
+
+// Fetch and update environment temperature chart
+async function loadEnvironmentChart() {
+    console.log('Loading environment chart data...');
+    try {
+        const response = await fetch('/api/charts/environment');
+        console.log('Response status:', response.status);
+        const data = await response.json();
+        console.log('Environment data:', data);
+
+        if (!data.hasData || !data.locations) {
+            console.log('No environment data available');
+            return;
+        }
+
+        const datasets = [];
+        let colorIndex = 0;
+
+        for (const [location, readings] of Object.entries(data.locations)) {
+            console.log(`Processing location: ${location}, readings: ${readings.length}`);
+            const color = colorPalette[colorIndex % colorPalette.length];
+
+            datasets.push({
+                label: location,
+                data: readings.map(r => ({
+                    x: new Date(r.timestamp),
+                    y: r.temperature
+                })),
+                borderColor: color.border,
+                backgroundColor: color.background,
+                fill: false,
+                tension: 0.4,
+                pointRadius: 0,
+                borderWidth: 2
+            });
+
+            colorIndex++;
+        }
+
+        console.log('Created datasets:', datasets.length);
+        chart1.data.datasets = datasets;
+        chart1.update();
+        console.log('Chart updated');
+    } catch (error) {
+        console.error('Failed to load environment chart:', error);
+    }
+}
+
+// Load environment chart on page load
+loadEnvironmentChart();
+
+// Refresh environment chart every 5 minutes
+setInterval(loadEnvironmentChart, 5 * 60 * 1000);
 
 // Chart 2 - Bar Chart (placeholder)
 const chart2Ctx = document.getElementById('chart2').getContext('2d');

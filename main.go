@@ -3,25 +3,30 @@ package main
 import (
 	"flag"
 	"log"
+	"math"
 	"net/http"
+	"time"
 
 	"miningRoom/db"
+	"miningRoom/questdb"
 
 	"github.com/gin-gonic/gin"
 )
 
 var (
-	machines []db.Machine
-	database *db.DB
+	machines      []db.Machine
+	database      *db.DB
+	questdbClient *questdb.Client
 )
 
 func main() {
 	dbPath := flag.String("db-path", "miningroom.db", "SQLite database path")
 	questdbHost := flag.String("questdb-host", "localhost", "QuestDB host for metrics")
-	questdbPort := flag.Int("questdb-port", 9000, "QuestDB port")
+	questdbPort := flag.Int("questdb-port", 9001, "QuestDB port")
 	flag.Parse()
 
 	log.Printf("Using QuestDB at %s:%d", *questdbHost, *questdbPort)
+	questdbClient = questdb.NewClient(*questdbHost, *questdbPort)
 
 	var err error
 	database, err = db.Open(*dbPath)
@@ -62,6 +67,7 @@ func main() {
 		api.GET("/status", getStatusHandler)
 		api.GET("/gauges", getGaugesHandler)
 		api.GET("/charts", getChartsHandler)
+		api.GET("/charts/environment", getEnvironmentChartHandler)
 
 		// Individual miner control
 		api.POST("/miner/power", setMinerPowerHandler)
@@ -81,21 +87,89 @@ func main() {
 	r.Run(":8080")
 }
 
+// isTimestampRecent checks if the given ISO 8601 timestamp is within the specified duration from now
+func isTimestampRecent(timestamp string, maxAge time.Duration) bool {
+	// Parse the timestamp (QuestDB returns ISO 8601 format with microseconds)
+	t, err := time.Parse("2006-01-02T15:04:05.000000Z", timestamp)
+	if err != nil {
+		log.Printf("Failed to parse timestamp %q: %v", timestamp, err)
+		return false
+	}
+	return time.Since(t) <= maxAge
+}
+
 func dashboardHandler(c *gin.Context) {
-	// Sample data - will be replaced with real queries later
+	// Get hashrate and status from QuestDB
+	online := false
+	statusLabel := "No Data"
+	hashrate := 0.0
+	temperature := 0.0
+	roomTemp := 0.0
+	power := 0.0
+
+	result, err := questdbClient.GetTotalHashrate()
+	if err != nil {
+		log.Printf("Failed to get hashrate from QuestDB: %v", err)
+	} else if result.HasData {
+		online = isTimestampRecent(result.Timestamp, 5*time.Minute)
+		if online {
+			statusLabel = "Online"
+		} else {
+			statusLabel = "Stale Data"
+		}
+		hashrate = result.TotalHashrate / 1000 // Convert GH/s to TH/s
+	}
+
+	// Get max temperature from QuestDB
+	tempResult, err := questdbClient.GetMaxTemperature()
+	if err != nil {
+		log.Printf("Failed to get temperature from QuestDB: %v", err)
+	} else if tempResult.HasData {
+		temperature = tempResult.MaxTemperature
+	}
+
+	// Get room temperature from QuestDB
+	roomTempResult, err := questdbClient.GetRoomTemperature()
+	if err != nil {
+		log.Printf("Failed to get room temperature from QuestDB: %v", err)
+	} else if roomTempResult.HasData {
+		roomTemp = roomTempResult.Temperature
+	}
+
+	// Get total power from QuestDB
+	powerResult, err := questdbClient.GetTotalPower()
+	if err != nil {
+		log.Printf("Failed to get power from QuestDB: %v", err)
+	} else if powerResult.HasData {
+		power = powerResult.TotalPower
+	}
+
+	// Calculate efficiency (J/TH) - Joules per Terahash
+	efficiency := 0.0
+	if hashrate > 0 {
+		efficiency = power / hashrate // W / (TH/s) = J/TH
+	}
+
+	// Round values for display
+	hashrate = math.Round(hashrate)
+	efficiency = math.Round(efficiency*10) / 10   // 1 decimal
+	temperature = math.Round(temperature*10) / 10 // 1 decimal
+	roomTemp = math.Round(roomTemp*10) / 10       // 1 decimal
+	power = math.Round(power)
+
 	data := gin.H{
 		"Title":    "Mining Dashboard",
 		"Machines": machines,
 		"Status": gin.H{
-			"Online": true,
-			"Label":  "System Status",
+			"Online": online,
+			"Label":  statusLabel,
 		},
 		"Gauges": []gin.H{
-			{"Label": "Hashrate", "Value": 125.5, "Unit": "MH/s"},
-			{"Label": "Temperature", "Value": 65, "Unit": "°C"},
-			{"Label": "Power", "Value": 850, "Unit": "W"},
-			{"Label": "Efficiency", "Value": 0.147, "Unit": "MH/W"},
-			{"Label": "Uptime", "Value": 99.8, "Unit": "%"},
+			{"Label": "Hashrate", "Value": hashrate, "Unit": "TH/s"},
+			{"Label": "Miner Temp", "Value": temperature, "Unit": "°C"},
+			{"Label": "Room Temp", "Value": roomTemp, "Unit": "°C"},
+			{"Label": "Power", "Value": power, "Unit": "W"},
+			{"Label": "Efficiency", "Value": efficiency, "Unit": "J/TH"},
 		},
 	}
 
@@ -103,22 +177,141 @@ func dashboardHandler(c *gin.Context) {
 }
 
 func getStatusHandler(c *gin.Context) {
-	// Placeholder for status API
+	result, err := questdbClient.GetTotalHashrate()
+	if err != nil {
+		log.Printf("Failed to get hashrate from QuestDB: %v", err)
+		c.JSON(http.StatusOK, gin.H{
+			"online":      false,
+			"label":       "No Data",
+			"hashrate":    0,
+			"temperature": 0,
+			"roomTemp":    0,
+			"power":       0,
+			"efficiency":  0,
+		})
+		return
+	}
+
+	if !result.HasData {
+		c.JSON(http.StatusOK, gin.H{
+			"online":      false,
+			"label":       "No Data",
+			"hashrate":    0,
+			"temperature": 0,
+			"roomTemp":    0,
+			"power":       0,
+			"efficiency":  0,
+		})
+		return
+	}
+
+	// Check if the timestamp is recent (within last 5 minutes)
+	online := isTimestampRecent(result.Timestamp, 5*time.Minute)
+	label := "Online"
+	if !online {
+		label = "Stale Data"
+	}
+
+	// Get max temperature
+	temperature := 0.0
+	tempResult, err := questdbClient.GetMaxTemperature()
+	if err != nil {
+		log.Printf("Failed to get temperature from QuestDB: %v", err)
+	} else if tempResult.HasData {
+		temperature = tempResult.MaxTemperature
+	}
+
+	// Get room temperature
+	roomTemp := 0.0
+	roomTempResult, err := questdbClient.GetRoomTemperature()
+	if err != nil {
+		log.Printf("Failed to get room temperature from QuestDB: %v", err)
+	} else if roomTempResult.HasData {
+		roomTemp = roomTempResult.Temperature
+	}
+
+	// Get total power
+	power := 0.0
+	powerResult, err := questdbClient.GetTotalPower()
+	if err != nil {
+		log.Printf("Failed to get power from QuestDB: %v", err)
+	} else if powerResult.HasData {
+		power = powerResult.TotalPower
+	}
+
+	// Calculate efficiency (J/TH) - Joules per Terahash
+	hashrateTH := result.TotalHashrate / 1000 // Convert GH/s to TH/s
+	efficiency := 0.0
+	if hashrateTH > 0 {
+		efficiency = power / hashrateTH // W / (TH/s) = J/TH
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"online": true,
-		"label":  "System Status",
+		"online":      online,
+		"label":       label,
+		"hashrate":    result.TotalHashrate,
+		"temperature": temperature,
+		"roomTemp":    roomTemp,
+		"power":       power,
+		"efficiency":  efficiency,
+		"timestamp":   result.Timestamp,
 	})
 }
 
 func getGaugesHandler(c *gin.Context) {
-	// Placeholder for gauges API
+	hashrate := 0.0
+	temperature := 0.0
+	roomTemp := 0.0
+	power := 0.0
+
+	result, err := questdbClient.GetTotalHashrate()
+	if err != nil {
+		log.Printf("Failed to get hashrate from QuestDB: %v", err)
+	} else if result.HasData {
+		hashrate = result.TotalHashrate / 1000 // Convert GH/s to TH/s
+	}
+
+	tempResult, err := questdbClient.GetMaxTemperature()
+	if err != nil {
+		log.Printf("Failed to get temperature from QuestDB: %v", err)
+	} else if tempResult.HasData {
+		temperature = tempResult.MaxTemperature
+	}
+
+	roomTempResult, err := questdbClient.GetRoomTemperature()
+	if err != nil {
+		log.Printf("Failed to get room temperature from QuestDB: %v", err)
+	} else if roomTempResult.HasData {
+		roomTemp = roomTempResult.Temperature
+	}
+
+	powerResult, err := questdbClient.GetTotalPower()
+	if err != nil {
+		log.Printf("Failed to get power from QuestDB: %v", err)
+	} else if powerResult.HasData {
+		power = powerResult.TotalPower
+	}
+
+	// Calculate efficiency (J/TH) - Joules per Terahash
+	efficiency := 0.0
+	if hashrate > 0 {
+		efficiency = power / hashrate // W / (TH/s) = J/TH
+	}
+
+	// Round values for display
+	hashrate = math.Round(hashrate)
+	efficiency = math.Round(efficiency*10) / 10   // 1 decimal
+	temperature = math.Round(temperature*10) / 10 // 1 decimal
+	roomTemp = math.Round(roomTemp*10) / 10       // 1 decimal
+	power = math.Round(power)
+
 	c.JSON(http.StatusOK, gin.H{
 		"gauges": []gin.H{
-			{"label": "Hashrate", "value": 125.5, "unit": "MH/s"},
-			{"label": "Temperature", "value": 65, "unit": "°C"},
-			{"label": "Power", "value": 850, "unit": "W"},
-			{"label": "Efficiency", "value": 0.147, "unit": "MH/W"},
-			{"label": "Uptime", "value": 99.8, "unit": "%"},
+			{"label": "Hashrate", "value": hashrate, "unit": "TH/s"},
+			{"label": "Miner Temp", "value": temperature, "unit": "°C"},
+			{"label": "Room Temp", "value": roomTemp, "unit": "°C"},
+			{"label": "Power", "value": power, "unit": "W"},
+			{"label": "Efficiency", "value": efficiency, "unit": "J/TH"},
 		},
 	})
 }
@@ -128,6 +321,20 @@ func getChartsHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Chart data will be provided via queries",
 	})
+}
+
+func getEnvironmentChartHandler(c *gin.Context) {
+	result, err := questdbClient.GetEnvironmentTemperatures()
+	if err != nil {
+		log.Printf("Failed to get environment temperatures from QuestDB: %v", err)
+		c.JSON(http.StatusOK, gin.H{
+			"locations": map[string][]interface{}{},
+			"hasData":   false,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
 }
 
 func environmentHandler(c *gin.Context) {
