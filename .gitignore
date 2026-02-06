@@ -1,5 +1,9 @@
-# Binary
+# Binaries
 miningRoom
+dashboard
+
+# Database
+miningroom.db
 
 # IDE
 .idea/
@@ -7,4 +11,3 @@ miningRoom
 
 # OS
 .DS_Store
-miningroom.db
