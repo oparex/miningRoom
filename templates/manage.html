@@ -108,8 +108,7 @@
                                                            id="select-{{$index}}"
                                                            data-ip="{{$machine.IP}}"
                                                            data-name="{{$machine.Name}}"
-                                                           data-index="{{$index}}"
-                                                           checked>
+                                                           data-index="{{$index}}">
                                                     <label class="form-check-label w-100" for="select-{{$index}}">
                                                         <span class="fw-semibold">{{$machine.Name}}</span>
                                                         <br><small class="text-muted">{{$machine.IP}}</small>
@@ -124,17 +123,50 @@
                         </div>
 
                         <!-- Control Inputs -->
-                        <div class="d-flex flex-wrap align-items-end gap-3">
+                        <!-- Set Power -->
+                        <div class="d-flex flex-wrap align-items-end gap-3 mb-3">
                             <div>
-                                <label class="form-label fw-semibold">Set Power</label>
+                                <label class="form-label fw-semibold mb-1">Set Power</label>
                                 <div class="input-group">
-                                    <input type="number" class="form-control" id="powerInput" min="0" value="3600" style="width: 120px;">
+                                    <input type="number" class="form-control" id="powerInput" min="0" value="2000" style="width: 120px;">
                                     <span class="input-group-text">W</span>
                                 </div>
                             </div>
                             <button class="btn btn-primary" onclick="applyPower()">
                                 <i class="bi bi-lightning-charge me-1"></i>Apply Power
                             </button>
+                        </div>
+
+                        <!-- Set Frequency & Voltage -->
+                        <div class="d-flex flex-wrap align-items-end gap-3 mb-3">
+                            <div>
+                                <label class="form-label fw-semibold mb-1">Frequency</label>
+                                <div class="input-group">
+                                    <input type="number" class="form-control" id="freqInput" min="0" value="340" step="1" style="width: 100px;">
+                                    <span class="input-group-text">MHz</span>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="form-label fw-semibold mb-1">Voltage</label>
+                                <div class="input-group">
+                                    <input type="number" class="form-control" id="voltInput" min="0" value="13.9" step="0.1" style="width: 100px;">
+                                    <span class="input-group-text">V</span>
+                                </div>
+                            </div>
+                            <button class="btn btn-primary" onclick="applyFreqVolt()">
+                                <i class="bi bi-cpu me-1"></i>Set Freq &amp; Volt
+                            </button>
+                        </div>
+
+                        <!-- Sleep Mode -->
+                        <div class="d-flex flex-wrap align-items-end gap-3 mb-3">
+                            <button class="btn btn-warning" onclick="applySleepMode()">
+                                <i class="bi bi-moon me-1"></i>Sleep Mode
+                            </button>
+                        </div>
+
+                        <!-- Start / Shutdown -->
+                        <div class="d-flex flex-wrap align-items-end gap-3">
                             <button class="btn btn-success" onclick="startMiners()">
                                 <i class="bi bi-play-fill me-1"></i>Start
                             </button>
@@ -152,38 +184,48 @@
                             <i class="bi bi-cpu me-2"></i>Miner Status
                         </h5>
                     </div>
-                    <div class="card-body">
+                    <div class="card-body p-0">
                         <div class="table-responsive">
                             <table class="table table-hover align-middle mb-0">
                                 <thead class="table-light">
                                     <tr>
+                                        <th>Active</th>
                                         <th>Status</th>
                                         <th>Name</th>
-                                        <th>IP Address</th>
-                                        <th>Set Power</th>
-                                        <th>Used Power</th>
+                                        <th>IP</th>
+                                        <th>Shelly IP</th>
+                                        <th>Mode</th>
+                                        <th>Target</th>
+                                        <th>Power</th>
+                                        <th>Frequency</th>
+                                        <th>Voltage</th>
                                     </tr>
                                 </thead>
-                                <tbody>
-                                    {{range $index, $machine := .Machines}}
-                                    <tr id="miner-row-{{$index}}">
-                                        <td>
-                                            <span class="status-dot online" id="status-{{$index}}"></span>
-                                        </td>
-                                        <td class="fw-semibold">{{$machine.Name}}</td>
-                                        <td><code>{{$machine.IP}}</code></td>
-                                        <td>
-                                            <span class="badge bg-primary" id="set-power-{{$index}}">3600 W</span>
-                                        </td>
-                                        <td>
-                                            <span class="badge bg-secondary" id="used-power-{{$index}}">-- W</span>
-                                        </td>
+                                <tbody id="manageMinersBody">
+                                    <tr>
+                                        <td colspan="10" class="text-center text-muted py-3">Loading...</td>
                                     </tr>
-                                    {{end}}
                                 </tbody>
                             </table>
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirm Modal -->
+    <div class="modal fade" id="confirmModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content" style="background-color: #fff; color: #000;">
+                <div class="modal-header" style="color: #000;">
+                    <h5 class="modal-title" id="confirmModalTitle" style="color: #000;">Confirm</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="confirmModalBody" style="color: #000;"></div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="confirmModalOk">Yes, proceed</button>
                 </div>
             </div>
         </div>
@@ -215,6 +257,92 @@
         updateTime();
         setInterval(updateTime, 1000);
 
+        // Load miner config and shellies data
+        async function loadManageMiners() {
+            try {
+                const response = await fetch('/api/manage/miners');
+                const data = await response.json();
+                const tbody = document.getElementById('manageMinersBody');
+
+                if (!data.miners || data.miners.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-3">No miners configured</td></tr>';
+                    return;
+                }
+
+                // Build shellies power map by device_id
+                const shelliesPower = {};
+                if (data.shellies && data.shellies.hasData && data.shellies.devices) {
+                    data.shellies.devices.forEach(d => {
+                        shelliesPower[d.deviceId] = Math.round(d.power);
+                    });
+                }
+
+                // Build miner status map by IP
+                const minerStatusMap = {};
+                if (data.minerStatuses && data.minerStatuses.hasData && data.minerStatuses.miners) {
+                    data.minerStatuses.miners.forEach(s => {
+                        minerStatusMap[s.minerIp] = s.status;
+                    });
+                }
+
+                // Build hashboards detailed map by miner IP
+                const hashboardsMap = {};
+                if (data.hashboardsDetailed && data.hashboardsDetailed.hasData && data.hashboardsDetailed.miners) {
+                    data.hashboardsDetailed.miners.forEach(h => {
+                        hashboardsMap[h.minerIp] = { voltage: h.avgVoltage, frequency: h.avgFrequency };
+                    });
+                }
+
+                tbody.innerHTML = data.miners.map(m => {
+                    const activeDot = m.online ? 'online' : 'offline';
+                    const minerStatus = minerStatusMap[m.ip] || '--';
+                    let statusBadge = `<span class="text-muted">--</span>`;
+                    if (minerStatus !== '--') {
+                        const sl = minerStatus.toLowerCase();
+                        const sc = sl === 'mining' ? 'bg-success' : sl === 'initializing' ? 'bg-warning' : 'bg-secondary';
+                        statusBadge = `<span class="badge ${sc}">${minerStatus}</span>`;
+                    }
+                    const mode = m.workMode || '--';
+                    let target = '--';
+                    if (!m.online) {
+                        target = '--';
+                    } else if (m.workMode === 'Fixed') {
+                        const tFreq = m.targetFreq ? Math.round(m.targetFreq) + ' MHz' : '?';
+                        const tVolt = m.targetVolt ? m.targetVolt.toFixed(1) + ' V' : '?';
+                        target = `T-Freq: ${tFreq} / T-Volt: ${tVolt}`;
+                    } else if (m.modeSelect === 'PowerTarget') {
+                        target = m.targetValue ? m.targetValue + ' W' : '--';
+                    } else if (m.modeSelect) {
+                        target = m.targetValue ? m.targetValue : '--';
+                    }
+                    const power = shelliesPower[m.name] !== undefined ? shelliesPower[m.name] + ' W' : '--';
+                    const hb = hashboardsMap[m.ip];
+                    const frequency = hb ? Math.round(hb.frequency) + ' MHz' : '--';
+                    const voltage = hb ? hb.voltage.toFixed(1) + ' V' : '--';
+
+                    const shellyIp = m.shellyIp || '--';
+
+                    return `<tr>
+                        <td><span class="status-dot ${activeDot}"></span></td>
+                        <td>${statusBadge}</td>
+                        <td class="fw-semibold">${m.name}</td>
+                        <td><code>${m.ip}</code></td>
+                        <td><code>${shellyIp}</code></td>
+                        <td>${mode}</td>
+                        <td>${target}</td>
+                        <td>${power}</td>
+                        <td>${frequency}</td>
+                        <td>${voltage}</td>
+                    </tr>`;
+                }).join('');
+            } catch (error) {
+                console.error('Failed to load manage miners:', error);
+            }
+        }
+
+        loadManageMiners();
+        setInterval(loadManageMiners, 60 * 1000);
+
         // Show toast notification
         function showToast(title, message, type) {
             const toast = document.getElementById('actionToast');
@@ -233,6 +361,21 @@
 
             const bsToast = new bootstrap.Toast(toast);
             bsToast.show();
+        }
+
+        // Confirmation modal helper
+        function showConfirm(title, message, onConfirm) {
+            document.getElementById('confirmModalTitle').textContent = title;
+            document.getElementById('confirmModalBody').textContent = message;
+            const okBtn = document.getElementById('confirmModalOk');
+            const modal = new bootstrap.Modal(document.getElementById('confirmModal'));
+            const handler = () => {
+                okBtn.removeEventListener('click', handler);
+                modal.hide();
+                onConfirm();
+            };
+            okBtn.addEventListener('click', handler);
+            modal.show();
         }
 
         // Get selected miners
@@ -268,22 +411,101 @@
                 return;
             }
             const ips = selected.map(m => m.ip);
+            const names = selected.map(m => m.name).join(', ');
 
-            fetch('/api/miners/power', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ips: ips, power: power })
-            })
-            .then(res => res.json())
-            .then(data => {
-                selected.forEach(m => {
-                    document.getElementById('set-power-' + m.index).textContent = power + ' W';
+            showConfirm('Set Power', `Set power to ${power} W for: ${names}. Are you sure?`, () => {
+                fetch('/api/miners/power', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ips: ips, power: power })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.failed && data.failed.length > 0) {
+                        showToast('Warning', `Failed for: ${data.failed.join(', ')}`, 'danger');
+                    } else {
+                        showToast('Power Set', `Power set to ${power} W for: ${names}`, 'success');
+                    }
+                    loadManageMiners();
+                })
+                .catch(err => {
+                    showToast('Error', 'Failed to set power', 'danger');
                 });
-                const names = selected.map(m => m.name).join(', ');
-                showToast('Power Set', `Power set to ${power} W for: ${names}`, 'success');
-            })
-            .catch(err => {
-                showToast('Error', 'Failed to set power', 'danger');
+            });
+        }
+
+        // Apply frequency & voltage to selected miners
+        function applyFreqVolt() {
+            const selected = getSelectedMiners();
+            if (selected.length === 0) {
+                showToast('Warning', 'No miners selected', 'danger');
+                return;
+            }
+
+            const freq = parseFloat(document.getElementById('freqInput').value);
+            const volt = parseFloat(document.getElementById('voltInput').value);
+            if (isNaN(freq) || freq <= 0) {
+                showToast('Warning', 'Please enter a valid frequency', 'danger');
+                return;
+            }
+            if (isNaN(volt) || volt <= 0) {
+                showToast('Warning', 'Please enter a valid voltage', 'danger');
+                return;
+            }
+
+            const ips = selected.map(m => m.ip);
+            const names = selected.map(m => m.name).join(', ');
+
+            showConfirm('Set Frequency & Voltage', `Set ${freq} MHz / ${volt} V for: ${names}. Are you sure?`, () => {
+                fetch('/api/miners/freq', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ips: ips, freq: freq, volt: volt })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.failed && data.failed.length > 0) {
+                        showToast('Warning', `Failed for: ${data.failed.join(', ')}`, 'danger');
+                    } else {
+                        showToast('Freq & Volt Set', `Set ${freq} MHz / ${volt} V for: ${names}`, 'success');
+                    }
+                    loadManageMiners();
+                })
+                .catch(err => {
+                    showToast('Error', 'Failed to set frequency & voltage', 'danger');
+                });
+            });
+        }
+
+        // Apply sleep mode to selected miners
+        function applySleepMode() {
+            const selected = getSelectedMiners();
+            if (selected.length === 0) {
+                showToast('Warning', 'No miners selected', 'danger');
+                return;
+            }
+
+            const ips = selected.map(m => m.ip);
+            const names = selected.map(m => m.name).join(', ');
+
+            showConfirm('Sleep Mode', `Set sleep mode for: ${names}. Are you sure?`, () => {
+                fetch('/api/miners/sleep', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ips: ips })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.failed && data.failed.length > 0) {
+                        showToast('Warning', `Failed for: ${data.failed.join(', ')}`, 'danger');
+                    } else {
+                        showToast('Sleep Mode', `Sleep mode set for: ${names}`, 'success');
+                    }
+                    loadManageMiners();
+                })
+                .catch(err => {
+                    showToast('Error', 'Failed to set sleep mode', 'danger');
+                });
             });
         }
 
@@ -296,22 +518,26 @@
             }
 
             const ips = selected.map(m => m.ip);
+            const names = selected.map(m => m.name).join(', ');
 
-            fetch('/api/miners/start', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ips: ips })
-            })
-            .then(res => res.json())
-            .then(data => {
-                selected.forEach(m => {
-                    document.getElementById('status-' + m.index).className = 'status-dot online';
+            showConfirm('Start Miners', `Start miners: ${names}. Are you sure?`, () => {
+                fetch('/api/miners/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ips: ips })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.failed && data.failed.length > 0) {
+                        showToast('Warning', `Failed to start: ${data.failed.join(', ')}`, 'danger');
+                    } else {
+                        showToast('Miners Started', `Started: ${names}`, 'success');
+                    }
+                    loadManageMiners();
+                })
+                .catch(err => {
+                    showToast('Error', 'Failed to start miners', 'danger');
                 });
-                const names = selected.map(m => m.name).join(', ');
-                showToast('Miners Started', `Started: ${names}`, 'success');
-            })
-            .catch(err => {
-                showToast('Error', 'Failed to start miners', 'danger');
             });
         }
 
@@ -323,25 +549,27 @@
                 return;
             }
 
-            const names = selected.map(m => m.name).join(', ');
-            if (!confirm(`Are you sure you want to shutdown: ${names}?`)) return;
-
             const ips = selected.map(m => m.ip);
+            const names = selected.map(m => m.name).join(', ');
 
-            fetch('/api/miners/shutdown', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ips: ips })
-            })
-            .then(res => res.json())
-            .then(data => {
-                selected.forEach(m => {
-                    document.getElementById('status-' + m.index).className = 'status-dot offline';
+            showConfirm('Shutdown Miners', `Shutdown miners: ${names}. Are you sure?`, () => {
+                fetch('/api/miners/shutdown', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ips: ips })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.failed && data.failed.length > 0) {
+                        showToast('Warning', `Failed to shutdown: ${data.failed.join(', ')}`, 'danger');
+                    } else {
+                        showToast('Miners Shutdown', `Shutdown: ${names}`, 'success');
+                    }
+                    loadManageMiners();
+                })
+                .catch(err => {
+                    showToast('Error', 'Failed to shutdown miners', 'danger');
                 });
-                showToast('Miners Shutdown', `Shutdown: ${names}`, 'success');
-            })
-            .catch(err => {
-                showToast('Error', 'Failed to shutdown miners', 'danger');
             });
         }
     </script>

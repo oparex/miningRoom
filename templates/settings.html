@@ -7,6 +7,7 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
     <link href="/static/css/dashboard.css" rel="stylesheet">
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
     <script src="/static/js/theme.js"></script>
 </head>
 <body>
@@ -124,6 +125,12 @@
                                                pattern="^(\d{1,3}\.){3}\d{1,3}$">
                                         <div class="form-text">Enter the miner's IP address</div>
                                     </div>
+                                    <div class="mb-3">
+                                        <label for="shellyIP" class="form-label">Shelly IP</label>
+                                        <input type="text" class="form-control" id="shellyIP" placeholder="e.g., 10.0.0.51"
+                                               pattern="^(\d{1,3}\.){3}\d{1,3}$">
+                                        <div class="form-text">Shelly Pro 1PM IP for power control (optional)</div>
+                                    </div>
                                     <button type="submit" class="btn btn-success">
                                         <i class="bi bi-plus-lg me-1"></i>Add Miner
                                     </button>
@@ -148,7 +155,7 @@
                                     <div class="list-group-item d-flex justify-content-between align-items-center" data-ip="{{.IP}}">
                                         <div>
                                             <span class="fw-semibold">{{.Name}}</span>
-                                            <br><small class="text-muted"><code>{{.IP}}</code></small>
+                                            <br><small class="text-muted"><code>{{.IP}}</code>{{if .ShellyIP}} &middot; Shelly: <code>{{.ShellyIP}}</code>{{end}}</small>
                                         </div>
                                         <button class="btn btn-outline-danger btn-sm" onclick="deleteMiner('{{.IP}}', '{{.Name}}')">
                                             <i class="bi bi-trash"></i>
@@ -165,6 +172,23 @@
                             </div>
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirm Modal -->
+    <div class="modal fade" id="confirmModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="confirmModalTitle">Confirm</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="confirmModalBody"></div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="confirmModalOk">Yes, proceed</button>
                 </div>
             </div>
         </div>
@@ -216,22 +240,39 @@
             bsToast.show();
         }
 
+        // Confirmation modal helper
+        function showConfirm(title, message, onConfirm) {
+            document.getElementById('confirmModalTitle').textContent = title;
+            document.getElementById('confirmModalBody').textContent = message;
+            const okBtn = document.getElementById('confirmModalOk');
+            const modal = new bootstrap.Modal(document.getElementById('confirmModal'));
+            const handler = () => {
+                okBtn.removeEventListener('click', handler);
+                modal.hide();
+                onConfirm();
+            };
+            okBtn.addEventListener('click', handler);
+            modal.show();
+        }
+
         // Add miner form submission
         document.getElementById('addMinerForm').addEventListener('submit', function(e) {
             e.preventDefault();
 
             const name = document.getElementById('minerName').value.trim();
             const ip = document.getElementById('minerIP').value.trim();
+            const shellyIp = document.getElementById('shellyIP').value.trim();
 
             if (!name || !ip) {
                 showToast('Error', 'Please fill in all fields', 'danger');
                 return;
             }
 
+            showConfirm('Add Miner', `Add miner "${name}" (${ip}). Are you sure?`, () => {
             fetch('/api/machines', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: name, ip: ip })
+                body: JSON.stringify({ name: name, ip: ip, shellyIp: shellyIp })
             })
             .then(res => res.json())
             .then(data => {
@@ -244,10 +285,11 @@
                     const item = document.createElement('div');
                     item.className = 'list-group-item d-flex justify-content-between align-items-center';
                     item.dataset.ip = ip;
+                    const shellyInfo = shellyIp ? ` &middot; Shelly: <code>${shellyIp}</code>` : '';
                     item.innerHTML = `
                         <div>
                             <span class="fw-semibold">${name}</span>
-                            <br><small class="text-muted"><code>${ip}</code></small>
+                            <br><small class="text-muted"><code>${ip}</code>${shellyInfo}</small>
                         </div>
                         <button class="btn btn-outline-danger btn-sm" onclick="deleteMiner('${ip}', '${name}')">
                             <i class="bi bi-trash"></i>
@@ -262,6 +304,7 @@
                     // Clear form
                     document.getElementById('minerName').value = '';
                     document.getElementById('minerIP').value = '';
+                    document.getElementById('shellyIP').value = '';
 
                     showToast('Success', `Added miner ${name} (${ip})`, 'success');
                 } else {
@@ -270,6 +313,7 @@
             })
             .catch(err => {
                 showToast('Error', 'Failed to add miner', 'danger');
+            });
             });
         });
 

@@ -10,6 +10,7 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
     <!-- Custom CSS -->
     <link href="/static/css/dashboard.css" rel="stylesheet">
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
     <!-- Theme Switcher -->
     <script src="/static/js/theme.js"></script>
 </head>
@@ -86,10 +87,10 @@
                         </h5>
                     </div>
                     <div class="card-body">
-                        <div class="row align-items-center">
+                        <div class="row">
                             <!-- Status Indicator -->
                             <div class="col-lg-2 col-md-4 col-sm-6 mb-3 mb-lg-0">
-                                <div class="status-box text-center p-3 rounded {{if .Status.Online}}status-online{{else}}status-offline{{end}}">
+                                <div class="status-box text-center p-3 rounded h-100 d-flex flex-column justify-content-center {{if .Status.Online}}status-online{{else}}status-offline{{end}}">
                                     <div class="status-indicator mb-2">
                                         <span class="status-dot {{if .Status.Online}}online{{else}}offline{{end}}"></span>
                                     </div>
@@ -100,7 +101,7 @@
                             <!-- Gauges -->
                             {{range .Gauges}}
                             <div class="col-lg-2 col-md-4 col-sm-6 mb-3 mb-lg-0">
-                                <div class="gauge-box text-center p-3 rounded bg-light">
+                                <div class="gauge-box text-center p-3 rounded bg-light h-100">
                                     <div class="gauge-label text-muted small mb-1">{{.Label}}</div>
                                     <div class="gauge-value h4 mb-0 text-primary">{{.Value}}</div>
                                     <div class="gauge-unit text-muted small">{{.Unit}}</div>
@@ -111,103 +112,61 @@
                     </div>
                 </div>
 
-                <!-- Charts Grid 2x2 -->
-                <div class="row">
-                    <!-- Chart 1 - Environment Temperature -->
-                    <div class="col-lg-6 mb-4">
-                        <div class="card shadow-sm h-100">
-                            <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                                <h6 class="mb-0"><i class="bi bi-thermometer-half me-2"></i>Environment Temperature</h6>
-                                <div class="dropdown">
-                                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                                        Options
-                                    </button>
-                                    <ul class="dropdown-menu dropdown-menu-end">
-                                        <li><a class="dropdown-item" href="#">Refresh</a></li>
-                                        <li><a class="dropdown-item" href="#">Export</a></li>
-                                    </ul>
-                                </div>
-                            </div>
-                            <div class="card-body" style="min-height: 350px;">
-                                <canvas id="chart1"></canvas>
-                            </div>
-                        </div>
+                <!-- Environment Temperatures -->
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0">
+                            <i class="bi bi-thermometer-half me-2"></i>Environment
+                        </h5>
                     </div>
-
-                    <!-- Chart 2 -->
-                    <div class="col-lg-6 mb-4">
-                        <div class="card shadow-sm h-100">
-                            <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                                <h6 class="mb-0">Chart 2</h6>
-                                <div class="dropdown">
-                                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                                        Options
-                                    </button>
-                                    <ul class="dropdown-menu dropdown-menu-end">
-                                        <li><a class="dropdown-item" href="#">Refresh</a></li>
-                                        <li><a class="dropdown-item" href="#">Export</a></li>
-                                    </ul>
-                                </div>
-                            </div>
-                            <div class="card-body">
-                                <canvas id="chart2"></canvas>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Chart 3 -->
-                    <div class="col-lg-6 mb-4">
-                        <div class="card shadow-sm h-100">
-                            <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                                <h6 class="mb-0">Chart 3</h6>
-                                <div class="dropdown">
-                                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                                        Options
-                                    </button>
-                                    <ul class="dropdown-menu dropdown-menu-end">
-                                        <li><a class="dropdown-item" href="#">Refresh</a></li>
-                                        <li><a class="dropdown-item" href="#">Export</a></li>
-                                    </ul>
-                                </div>
-                            </div>
-                            <div class="card-body">
-                                <canvas id="chart3"></canvas>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Chart 4 -->
-                    <div class="col-lg-6 mb-4">
-                        <div class="card shadow-sm h-100">
-                            <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                                <h6 class="mb-0">Chart 4</h6>
-                                <div class="dropdown">
-                                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                                        Options
-                                    </button>
-                                    <ul class="dropdown-menu dropdown-menu-end">
-                                        <li><a class="dropdown-item" href="#">Refresh</a></li>
-                                        <li><a class="dropdown-item" href="#">Export</a></li>
-                                    </ul>
-                                </div>
-                            </div>
-                            <div class="card-body">
-                                <canvas id="chart4"></canvas>
+                    <div class="card-body">
+                        <div class="row" id="envTempContainer">
+                            <div class="col">
+                                <div class="text-center text-muted py-5">Loading...</div>
                             </div>
                         </div>
                     </div>
                 </div>
+
+                <!-- Miner Status Table -->
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0">
+                            <i class="bi bi-cpu me-2"></i>Miners
+                        </h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>IP</th>
+                                        <th>Status</th>
+                                        <th>Mode</th>
+                                        <th>Hashrate</th>
+                                        <th>Power</th>
+                                        <th>Efficiency</th>
+                                        <th>Temp Max</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="minerStatusBody">
+                                    <tr>
+                                        <td colspan="8" class="text-center text-muted py-3">Loading...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
             </div>
         </div>
     </div>
 
     <!-- Bootstrap 5 JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-    <!-- Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-    <!-- Chart.js date adapter for time scales -->
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
     <!-- Custom JS -->
-    <script src="/static/js/dashboard.js?v=4"></script>
+    <script src="/static/js/dashboard.js?v=5"></script>
 </body>
 </html>

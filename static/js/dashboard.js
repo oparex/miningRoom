@@ -12,226 +12,83 @@ function updateTime() {
 updateTime();
 setInterval(updateTime, 1000);
 
-// Chart configuration
-const chartColors = {
-    primary: 'rgba(13, 110, 253, 1)',
-    primaryLight: 'rgba(13, 110, 253, 0.2)',
-    success: 'rgba(25, 135, 84, 1)',
-    successLight: 'rgba(25, 135, 84, 0.2)',
-    warning: 'rgba(255, 193, 7, 1)',
-    warningLight: 'rgba(255, 193, 7, 0.2)',
-    danger: 'rgba(220, 53, 69, 1)',
-    dangerLight: 'rgba(220, 53, 69, 0.2)',
-    info: 'rgba(13, 202, 240, 1)',
-    infoLight: 'rgba(13, 202, 240, 0.2)',
-    purple: 'rgba(111, 66, 193, 1)',
-    purpleLight: 'rgba(111, 66, 193, 0.2)',
-};
-
-// Color palette for dynamic datasets
-const colorPalette = [
-    { border: chartColors.primary, background: chartColors.primaryLight },
-    { border: chartColors.success, background: chartColors.successLight },
-    { border: chartColors.warning, background: chartColors.warningLight },
-    { border: chartColors.danger, background: chartColors.dangerLight },
-    { border: chartColors.info, background: chartColors.infoLight },
-    { border: chartColors.purple, background: chartColors.purpleLight },
-];
-
-// Sample labels for charts (will be replaced with real data)
-const sampleLabels = ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '24:00'];
-
-// Chart 1 - Environment Temperature Chart
-const chart1Ctx = document.getElementById('chart1').getContext('2d');
-let chart1 = new Chart(chart1Ctx, {
-    type: 'line',
-    data: {
-        datasets: []
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-            legend: {
-                display: false
-            },
-            title: {
-                display: false
-            }
-        },
-        scales: {
-            x: {
-                type: 'time',
-                display: false
-            },
-            y: {
-                title: {
-                    display: true,
-                    text: '°C'
-                },
-                grace: '10%'
-            }
-        }
-    }
-});
-
-// Fetch and update environment temperature chart
-async function loadEnvironmentChart() {
-    console.log('Loading environment chart data...');
+// Environment Temperature Boxes
+async function loadEnvironmentTemps() {
     try {
-        const response = await fetch('/api/charts/environment');
-        console.log('Response status:', response.status);
+        const response = await fetch('/api/environment/latest');
         const data = await response.json();
-        console.log('Environment data:', data);
+        const container = document.getElementById('envTempContainer');
 
-        if (!data.hasData || !data.locations) {
-            console.log('No environment data available');
+        if (!data.hasData || !data.readings || data.readings.length === 0) {
+            container.innerHTML = '<div class="col"><div class="text-center text-muted py-5">No environment data available</div></div>';
             return;
         }
 
-        const datasets = [];
-        let colorIndex = 0;
+        const locationOrder = ['outside', 'miningroom', 'washroom'];
+        data.readings.sort((a, b) => {
+            const ia = locationOrder.indexOf(a.location);
+            const ib = locationOrder.indexOf(b.location);
+            return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+        });
 
-        for (const [location, readings] of Object.entries(data.locations)) {
-            console.log(`Processing location: ${location}, readings: ${readings.length}`);
-            const color = colorPalette[colorIndex % colorPalette.length];
-
-            datasets.push({
-                label: location,
-                data: readings.map(r => ({
-                    x: new Date(r.timestamp),
-                    y: r.temperature
-                })),
-                borderColor: color.border,
-                backgroundColor: color.background,
-                fill: false,
-                tension: 0.4,
-                pointRadius: 0,
-                borderWidth: 2
-            });
-
-            colorIndex++;
-        }
-
-        console.log('Created datasets:', datasets.length);
-        chart1.data.datasets = datasets;
-        chart1.update();
-        console.log('Chart updated');
+        container.innerHTML = data.readings.map(r => {
+            const ts = new Date(r.timestamp.endsWith('Z') ? r.timestamp : r.timestamp + 'Z');
+            const ageMs = Date.now() - ts.getTime();
+            const stale = isNaN(ageMs) || ageMs > 120 * 1000;
+            const bgClass = stale ? 'bg-danger text-white' : 'bg-light';
+            const textClass = stale ? 'text-white' : 'text-primary';
+            const mutedClass = stale ? 'text-white-50' : 'text-muted';
+            const temp = r.temperature.toFixed(1);
+            return `<div class="col-lg-4 col-md-4 mb-3 mb-lg-0">
+                <div class="text-center p-3 rounded ${bgClass} h-100 d-flex flex-column justify-content-center" style="min-height: 180px;">
+                    <div class="${mutedClass} small mb-1">${r.location}</div>
+                    <div class="h2 mb-0 ${textClass}">${temp}</div>
+                    <div class="${mutedClass} small">&deg;C</div>
+                </div>
+            </div>`;
+        }).join('');
     } catch (error) {
-        console.error('Failed to load environment chart:', error);
+        console.error('Failed to load environment temperatures:', error);
     }
 }
 
-// Load environment chart on page load
-loadEnvironmentChart();
+loadEnvironmentTemps();
+setInterval(loadEnvironmentTemps, 60 * 1000);
 
-// Refresh environment chart every 5 minutes
-setInterval(loadEnvironmentChart, 5 * 60 * 1000);
+// Miner Status Table
+async function loadMinerStatus() {
+    try {
+        const response = await fetch('/api/miners/status');
+        const data = await response.json();
+        const tbody = document.getElementById('minerStatusBody');
 
-// Chart 2 - Bar Chart (placeholder)
-const chart2Ctx = document.getElementById('chart2').getContext('2d');
-const chart2 = new Chart(chart2Ctx, {
-    type: 'bar',
-    data: {
-        labels: sampleLabels,
-        datasets: [{
-            label: 'Dataset 2',
-            data: [45, 67, 34, 78, 52, 89, 63],
-            backgroundColor: chartColors.success,
-            borderColor: chartColors.success,
-            borderWidth: 1
-        }]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-            legend: {
-                display: true,
-                position: 'top'
-            }
-        },
-        scales: {
-            y: {
-                beginAtZero: true
-            }
+        if (!data.hasData || !data.miners || data.miners.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-3">No miner data available</td></tr>';
+            return;
         }
-    }
-});
 
-// Chart 3 - Line Chart (placeholder)
-const chart3Ctx = document.getElementById('chart3').getContext('2d');
-const chart3 = new Chart(chart3Ctx, {
-    type: 'line',
-    data: {
-        labels: sampleLabels,
-        datasets: [{
-            label: 'Dataset 3',
-            data: [28, 48, 40, 19, 86, 27, 55],
-            borderColor: chartColors.warning,
-            backgroundColor: chartColors.warningLight,
-            fill: true,
-            tension: 0.4
-        }]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-            legend: {
-                display: true,
-                position: 'top'
-            }
-        },
-        scales: {
-            y: {
-                beginAtZero: true
-            }
-        }
+        tbody.innerHTML = data.miners.map(m => {
+            const statusLower = m.status.toLowerCase();
+            const statusClass = statusLower === 'mining' ? 'bg-success' : statusLower === 'initializing' ? 'bg-warning' : 'bg-secondary';
+            const hashrateTH = (m.hashrate / 1000).toFixed(1);
+            const power = Math.round(m.power);
+            const efficiency = m.efficiency.toFixed(1);
+            const temp = m.temperatureMax.toFixed(1);
+            return `<tr>
+                <td class="fw-semibold">${m.name}</td>
+                <td><code>${m.minerIp}</code></td>
+                <td><span class="badge ${statusClass}">${m.status}</span></td>
+                <td>${m.workMode}</td>
+                <td>${hashrateTH} TH/s</td>
+                <td>${power} W</td>
+                <td>${efficiency} J/TH</td>
+                <td>${temp} &deg;C</td>
+            </tr>`;
+        }).join('');
+    } catch (error) {
+        console.error('Failed to load miner status:', error);
     }
-});
-
-// Chart 4 - Doughnut Chart (placeholder)
-const chart4Ctx = document.getElementById('chart4').getContext('2d');
-const chart4 = new Chart(chart4Ctx, {
-    type: 'doughnut',
-    data: {
-        labels: ['Category A', 'Category B', 'Category C', 'Category D'],
-        datasets: [{
-            data: [30, 25, 20, 25],
-            backgroundColor: [
-                chartColors.primary,
-                chartColors.success,
-                chartColors.warning,
-                chartColors.danger
-            ],
-            borderWidth: 0
-        }]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-            legend: {
-                display: true,
-                position: 'right'
-            }
-        }
-    }
-});
-
-// Function to update charts with new data (to be called from API responses)
-function updateChart(chartInstance, labels, data) {
-    chartInstance.data.labels = labels;
-    chartInstance.data.datasets[0].data = data;
-    chartInstance.update();
 }
 
-// Export chart instances for external use
-window.dashboardCharts = {
-    chart1: chart1,
-    chart2: chart2,
-    chart3: chart3,
-    chart4: chart4,
-    updateChart: updateChart
-};
+loadMinerStatus();
+setInterval(loadMinerStatus, 60 * 1000);

@@ -7,6 +7,7 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
     <link href="/static/css/dashboard.css" rel="stylesheet">
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
     <script src="/static/js/theme.js"></script>
 </head>
 <body>
@@ -139,11 +140,11 @@
                         </div>
                     </div>
 
-                    <!-- Chart 4: Air Quality -->
+                    <!-- Chart 4: Hourly Avg Temperature -->
                     <div class="col-lg-6 mb-4">
                         <div class="card shadow-sm h-100">
                             <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                                <h6 class="mb-0"><i class="bi bi-wind me-2"></i>Air Quality</h6>
+                                <h6 class="mb-0"><i class="bi bi-bar-chart me-2"></i>Avg Temp by Hour (7d)</h6>
                                 <div class="dropdown">
                                     <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
                                         Options
@@ -155,7 +156,7 @@
                                 </div>
                             </div>
                             <div class="card-body">
-                                <canvas id="airQualityChart"></canvas>
+                                <canvas id="hourlyTempChart"></canvas>
                             </div>
                         </div>
                     </div>
@@ -166,6 +167,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
     <script>
         // Sidebar toggle
         document.getElementById('sidebarCollapse').addEventListener('click', function() {
@@ -179,86 +181,133 @@
         updateTime();
         setInterval(updateTime, 1000);
 
-        // Placeholder charts - will be replaced with real data
-        const chartConfig = {
-            type: 'line',
+        const colorPalette = [
+            { border: 'rgba(13, 110, 253, 1)', background: 'rgba(13, 110, 253, 0.2)' },
+            { border: 'rgba(25, 135, 84, 1)', background: 'rgba(25, 135, 84, 0.2)' },
+            { border: 'rgba(255, 193, 7, 1)', background: 'rgba(255, 193, 7, 0.2)' },
+            { border: 'rgba(220, 53, 69, 1)', background: 'rgba(220, 53, 69, 0.2)' },
+            { border: 'rgba(13, 202, 240, 1)', background: 'rgba(13, 202, 240, 0.2)' },
+            { border: 'rgba(111, 66, 193, 1)', background: 'rgba(111, 66, 193, 0.2)' },
+        ];
+
+        function makeTimeSeriesChart(canvasId, yLabel) {
+            return new Chart(document.getElementById(canvasId), {
+                type: 'line',
+                data: { datasets: [] },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: true, position: 'top' }, title: { display: false } },
+                    scales: {
+                        x: { type: 'time', display: false },
+                        y: { title: { display: true, text: yLabel }, grace: '10%' }
+                    }
+                }
+            });
+        }
+
+        function parseTimestamp(ts) {
+            return new Date(ts.endsWith('Z') ? ts : ts + 'Z');
+        }
+
+        function buildDatasets(locations, valueKey) {
+            const datasets = [];
+            let i = 0;
+            for (const [location, readings] of Object.entries(locations)) {
+                const color = colorPalette[i % colorPalette.length];
+                datasets.push({
+                    label: location,
+                    data: readings.map(r => ({ x: parseTimestamp(r.timestamp), y: r[valueKey] })),
+                    borderColor: color.border,
+                    backgroundColor: color.background,
+                    fill: false,
+                    tension: 0.4,
+                    pointRadius: 0,
+                    borderWidth: 2
+                });
+                i++;
+            }
+            return datasets;
+        }
+
+        // Temperature Chart
+        const tempChart = makeTimeSeriesChart('tempChart', '°C');
+
+        async function loadTempChart() {
+            try {
+                const resp = await fetch('/api/charts/environment');
+                const data = await resp.json();
+                if (!data.hasData || !data.locations) return;
+                tempChart.data.datasets = buildDatasets(data.locations, 'temperature');
+                tempChart.update();
+            } catch (e) { console.error('Failed to load temperature chart:', e); }
+        }
+        loadTempChart();
+        setInterval(loadTempChart, 5 * 60 * 1000);
+
+        // Humidity Chart
+        const humChart = makeTimeSeriesChart('humidityChart', '%');
+
+        async function loadHumidityChart() {
+            try {
+                const resp = await fetch('/api/charts/humidity');
+                const data = await resp.json();
+                if (!data.hasData || !data.locations) return;
+                humChart.data.datasets = buildDatasets(data.locations, 'humidity');
+                humChart.update();
+            } catch (e) { console.error('Failed to load humidity chart:', e); }
+        }
+        loadHumidityChart();
+        setInterval(loadHumidityChart, 5 * 60 * 1000);
+
+        // Pressure Chart
+        const pressChart = makeTimeSeriesChart('pressureChart', 'hPa');
+
+        async function loadPressureChart() {
+            try {
+                const resp = await fetch('/api/charts/pressure');
+                const data = await resp.json();
+                if (!data.hasData || !data.locations) return;
+                pressChart.data.datasets = buildDatasets(data.locations, 'pressure');
+                pressChart.update();
+            } catch (e) { console.error('Failed to load pressure chart:', e); }
+        }
+        loadPressureChart();
+        setInterval(loadPressureChart, 5 * 60 * 1000);
+
+        // Hourly Avg Temperature Bar Chart
+        const hourlyChart = new Chart(document.getElementById('hourlyTempChart'), {
+            type: 'bar',
+            data: { labels: [], datasets: [] },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false }
-                },
+                plugins: { legend: { display: false }, title: { display: false } },
                 scales: {
-                    y: { beginAtZero: false }
+                    x: { title: { display: true, text: 'Hour' } },
+                    y: { title: { display: true, text: '°C' }, beginAtZero: false, grace: '20%' }
                 }
             }
-        };
-
-        const labels = ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '24:00'];
-
-        // Temperature Chart
-        new Chart(document.getElementById('tempChart'), {
-            ...chartConfig,
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Temperature',
-                    data: [22, 21, 20, 23, 26, 25, 23],
-                    borderColor: '#dc3545',
-                    backgroundColor: 'rgba(220, 53, 69, 0.1)',
-                    fill: true,
-                    tension: 0.4
-                }]
-            }
         });
 
-        // Humidity Chart
-        new Chart(document.getElementById('humidityChart'), {
-            ...chartConfig,
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Humidity',
-                    data: [45, 48, 52, 50, 42, 40, 44],
-                    borderColor: '#0dcaf0',
-                    backgroundColor: 'rgba(13, 202, 240, 0.1)',
-                    fill: true,
-                    tension: 0.4
-                }]
-            }
-        });
-
-        // Pressure Chart
-        new Chart(document.getElementById('pressureChart'), {
-            ...chartConfig,
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Pressure',
-                    data: [1013, 1012, 1011, 1010, 1012, 1014, 1015],
-                    borderColor: '#6f42c1',
-                    backgroundColor: 'rgba(111, 66, 193, 0.1)',
-                    fill: true,
-                    tension: 0.4
-                }]
-            }
-        });
-
-        // Air Quality Chart
-        new Chart(document.getElementById('airQualityChart'), {
-            ...chartConfig,
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'AQI',
-                    data: [35, 38, 42, 45, 40, 36, 34],
-                    borderColor: '#198754',
-                    backgroundColor: 'rgba(25, 135, 84, 0.1)',
-                    fill: true,
-                    tension: 0.4
-                }]
-            }
-        });
+        async function loadHourlyTempChart() {
+            try {
+                const resp = await fetch('/api/charts/hourly-temp');
+                const data = await resp.json();
+                if (!data.hasData || !data.hours) return;
+                hourlyChart.data.labels = data.hours.map(h => h.hour + ':00');
+                hourlyChart.data.datasets = [{
+                    label: 'Avg Temp',
+                    data: data.hours.map(h => Math.round(h.avgTemp * 10) / 10),
+                    backgroundColor: 'rgba(13, 110, 253, 0.6)',
+                    borderColor: 'rgba(13, 110, 253, 1)',
+                    borderWidth: 1
+                }];
+                hourlyChart.update();
+            } catch (e) { console.error('Failed to load hourly temp chart:', e); }
+        }
+        loadHourlyTempChart();
+        setInterval(loadHourlyTempChart, 5 * 60 * 1000);
     </script>
 </body>
 </html>

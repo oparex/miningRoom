@@ -7,6 +7,7 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
     <link href="/static/css/dashboard.css" rel="stylesheet">
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
     <script src="/static/js/theme.js"></script>
 </head>
 <body>
@@ -196,6 +197,40 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Daily Energy Usage Chart -->
+                <div class="row">
+                    <div class="col-12 mb-4">
+                        <div class="card shadow-sm">
+                            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                                <h6 class="mb-0"><i class="bi bi-battery-charging me-2"></i>Daily Energy Usage (Last 7 Days)</h6>
+                                <small class="text-muted">Energy (kWh) = Avg Power (W) x 24h / 1000</small>
+                            </div>
+                            <div class="card-body">
+                                <div style="height: 300px;">
+                                    <canvas id="dailyEnergyChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Thermal Insulation Section -->
+                <div class="row">
+                    <div class="col-12 mb-4">
+                        <div class="card shadow-sm">
+                            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                                <h6 class="mb-0"><i class="bi bi-thermometer me-2"></i>Thermal Insulation (W/K) - Lower is Better</h6>
+                                <small class="text-muted">Thermal Conductance = Power / (T_inside - T_outside)</small>
+                            </div>
+                            <div class="card-body">
+                                <div style="height: 300px;">
+                                    <canvas id="thermalInsulationChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -302,6 +337,226 @@
                 plugins: { legend: { display: false } }
             }
         });
+
+        // Thermal Insulation Chart
+        let thermalChart = null;
+
+        async function loadThermalInsulationChart() {
+            try {
+                const response = await fetch('/api/charts/thermal-insulation');
+                const data = await response.json();
+
+                if (!data.hasData || !data.dataPoints || data.dataPoints.length === 0) {
+                    document.getElementById('thermalInsulationChart').parentElement.innerHTML =
+                        '<div class="text-center text-muted py-5">No thermal data available</div>';
+                    return;
+                }
+
+                // Format timestamps and extract values
+                const labels = data.dataPoints.map(d => {
+                    const date = new Date(d.timestamp.endsWith('Z') ? d.timestamp : d.timestamp + 'Z');
+                    return date.toLocaleString('en-GB', {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                });
+
+                const conductanceValues = data.dataPoints.map(d => d.thermalConductance.toFixed(1));
+                const deltaTValues = data.dataPoints.map(d => d.deltaT.toFixed(1));
+
+                // Calculate average for reference line
+                const avgConductance = conductanceValues.reduce((a, b) => parseFloat(a) + parseFloat(b), 0) / conductanceValues.length;
+
+                const ctx = document.getElementById('thermalInsulationChart').getContext('2d');
+
+                if (thermalChart) {
+                    thermalChart.destroy();
+                }
+
+                thermalChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: 'Thermal Conductance (W/K)',
+                                data: conductanceValues,
+                                borderColor: 'rgb(220, 53, 69)',
+                                backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                                fill: true,
+                                tension: 0.3,
+                                pointRadius: 0,
+                                yAxisID: 'y'
+                            },
+                            {
+                                label: 'ΔT (°C)',
+                                data: deltaTValues,
+                                borderColor: 'rgb(13, 110, 253)',
+                                backgroundColor: 'transparent',
+                                borderDash: [5, 5],
+                                tension: 0.3,
+                                pointRadius: 0,
+                                yAxisID: 'y1'
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: {
+                            mode: 'index',
+                            intersect: false
+                        },
+                        plugins: {
+                            legend: {
+                                display: true,
+                                position: 'top'
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const label = context.dataset.label || '';
+                                        const value = context.parsed.y;
+                                        if (label.includes('Conductance')) {
+                                            return `${label}: ${value} W/K`;
+                                        } else {
+                                            return `${label}: ${value} °C`;
+                                        }
+                                    }
+                                }
+                            },
+                            annotation: {
+                                annotations: {
+                                    avgLine: {
+                                        type: 'line',
+                                        yMin: avgConductance,
+                                        yMax: avgConductance,
+                                        borderColor: 'rgba(220, 53, 69, 0.5)',
+                                        borderWidth: 2,
+                                        borderDash: [10, 5],
+                                        label: {
+                                            display: true,
+                                            content: `Avg: ${avgConductance.toFixed(1)} W/K`,
+                                            position: 'end'
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                display: true,
+                                ticks: {
+                                    maxTicksLimit: 12,
+                                    maxRotation: 45
+                                }
+                            },
+                            y: {
+                                type: 'linear',
+                                display: true,
+                                position: 'left',
+                                title: {
+                                    display: true,
+                                    text: 'Thermal Conductance (W/K)'
+                                }
+                            },
+                            y1: {
+                                type: 'linear',
+                                display: true,
+                                position: 'right',
+                                title: {
+                                    display: true,
+                                    text: 'ΔT (°C)'
+                                },
+                                grid: {
+                                    drawOnChartArea: false
+                                }
+                            }
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error('Failed to load thermal insulation chart:', error);
+            }
+        }
+
+        // Daily Energy Usage Chart
+        let dailyEnergyChart = null;
+
+        async function loadDailyEnergyChart() {
+            try {
+                const response = await fetch('/api/charts/daily-energy');
+                const data = await response.json();
+
+                if (!data.hasData || !data.days || data.days.length === 0) {
+                    document.getElementById('dailyEnergyChart').parentElement.innerHTML =
+                        '<div class="text-center text-muted py-5">No energy data available</div>';
+                    return;
+                }
+
+                const labels = data.days.map(d => {
+                    const date = new Date(d.date + 'T00:00:00');
+                    return date.toLocaleDateString('en-GB', { weekday: 'short', month: 'short', day: 'numeric' });
+                });
+
+                const energyValues = data.days.map(d => d.energyKwh.toFixed(1));
+                const avgPowerValues = data.days.map(d => d.avgPowerW.toFixed(0));
+
+                const ctx = document.getElementById('dailyEnergyChart').getContext('2d');
+
+                if (dailyEnergyChart) {
+                    dailyEnergyChart.destroy();
+                }
+
+                dailyEnergyChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Energy (kWh)',
+                            data: energyValues,
+                            backgroundColor: 'rgba(255, 193, 7, 0.8)',
+                            borderColor: 'rgb(255, 193, 7)',
+                            borderWidth: 1,
+                            borderRadius: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const idx = context.dataIndex;
+                                        const kwh = energyValues[idx];
+                                        const avgW = avgPowerValues[idx];
+                                        return [`Energy: ${kwh} kWh`, `Avg Power: ${avgW} W`];
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Energy (kWh)'
+                                }
+                            }
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error('Failed to load daily energy chart:', error);
+            }
+        }
+
+        loadDailyEnergyChart();
+        loadThermalInsulationChart();
     </script>
 </body>
 </html>

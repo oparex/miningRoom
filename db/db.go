@@ -7,8 +7,9 @@ import (
 )
 
 type Machine struct {
-	Name string
-	IP   string
+	Name     string
+	IP       string
+	ShellyIP string
 }
 
 type DB struct {
@@ -32,14 +33,21 @@ func (d *DB) EnsureSchema() error {
 		CREATE TABLE IF NOT EXISTS machines (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			name TEXT NOT NULL,
-			ip TEXT NOT NULL
+			ip TEXT NOT NULL,
+			shelly_ip TEXT NOT NULL DEFAULT ''
 		)
 	`)
-	return err
+	if err != nil {
+		return err
+	}
+
+	// Migration: add shelly_ip column if it doesn't exist (for existing databases)
+	d.conn.Exec("ALTER TABLE machines ADD COLUMN shelly_ip TEXT NOT NULL DEFAULT ''")
+	return nil
 }
 
 func (d *DB) FetchMachines() ([]Machine, error) {
-	rows, err := d.conn.Query("SELECT name, ip FROM machines ORDER BY name")
+	rows, err := d.conn.Query("SELECT name, ip, shelly_ip FROM machines ORDER BY name")
 	if err != nil {
 		return nil, err
 	}
@@ -48,7 +56,7 @@ func (d *DB) FetchMachines() ([]Machine, error) {
 	var machines []Machine
 	for rows.Next() {
 		var m Machine
-		if err := rows.Scan(&m.Name, &m.IP); err != nil {
+		if err := rows.Scan(&m.Name, &m.IP, &m.ShellyIP); err != nil {
 			return nil, err
 		}
 		machines = append(machines, m)
@@ -56,8 +64,13 @@ func (d *DB) FetchMachines() ([]Machine, error) {
 	return machines, rows.Err()
 }
 
-func (d *DB) AddMachine(name, ip string) error {
-	_, err := d.conn.Exec("INSERT INTO machines (name, ip) VALUES (?, ?)", name, ip)
+func (d *DB) AddMachine(name, ip, shellyIP string) error {
+	_, err := d.conn.Exec("INSERT INTO machines (name, ip, shelly_ip) VALUES (?, ?, ?)", name, ip, shellyIP)
+	return err
+}
+
+func (d *DB) UpdateMachineShellyIP(ip, shellyIP string) error {
+	_, err := d.conn.Exec("UPDATE machines SET shelly_ip = ? WHERE ip = ?", shellyIP, ip)
 	return err
 }
 
