@@ -11,6 +11,7 @@ import (
 	"io"
 	"log"
 	"math"
+	"net"
 	"net/http"
 	"sort"
 	"strings"
@@ -30,6 +31,42 @@ var (
 	minerUser     string
 	minerPass     string
 )
+
+var innerNetwork = func() *net.IPNet {
+	_, n, _ := net.ParseCIDR("10.0.0.0/24")
+	return n
+}()
+
+// isInnerNetwork returns true if the client IP is on the inner network (10.0.0.0/24) or localhost.
+func isInnerNetwork(clientIP string) bool {
+	ip := net.ParseIP(clientIP)
+	if ip == nil {
+		return false
+	}
+	if ip.IsLoopback() {
+		return true
+	}
+	return innerNetwork.Contains(ip)
+}
+
+// networkContextMiddleware sets ShowManage in the gin context based on client IP.
+func networkContextMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Set("ShowManage", isInnerNetwork(c.ClientIP()))
+		c.Next()
+	}
+}
+
+// requireInnerNetwork returns 404 for clients not on the inner network.
+func requireInnerNetwork() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !isInnerNetwork(c.ClientIP()) {
+			c.AbortWithStatus(http.StatusNotFound)
+			return
+		}
+		c.Next()
+	}
+}
 
 func main() {
 	dbPath := flag.String("db-path", "miningroom.db", "SQLite database path")
@@ -61,6 +98,9 @@ func main() {
 
 	r := gin.Default()
 
+	// Check client network on every request
+	r.Use(networkContextMiddleware())
+
 	// Load HTML templates
 	r.LoadHTMLGlob("templates/*")
 
@@ -72,10 +112,10 @@ func main() {
 	r.GET("/miners", minersHandler)
 	r.GET("/power-mining", powerMiningHandler)
 	r.GET("/environment", environmentHandler)
-	r.GET("/manage", manageHandler)
+	r.GET("/manage", requireInnerNetwork(), manageHandler)
 	r.GET("/settings", settingsHandler)
 
-	// API routes for dashboard data (placeholder for future queries)
+	// API routes for dashboard data
 	api := r.Group("/api")
 	{
 		api.GET("/status", getStatusHandler)
@@ -90,19 +130,24 @@ func main() {
 		api.GET("/charts/daily-energy", getDailyEnergyChartHandler)
 		api.GET("/miners/status", getMinerStatusHandler)
 		api.GET("/environment/latest", getEnvironmentLatestHandler)
-		api.GET("/manage/miners", getManageMinersHandler)
 
-		// Individual miner control
-		api.POST("/miner/power", setMinerPowerHandler)
-		api.POST("/miner/start", startMinerHandler)
-		api.POST("/miner/shutdown", shutdownMinerHandler)
+		// Manage APIs - inner network only
+		manage := api.Group("/", requireInnerNetwork())
+		{
+			manage.GET("/manage/miners", getManageMinersHandler)
 
-		// Bulk miner control
-		api.POST("/miners/power", setAllMinersPowerHandler)
-		api.POST("/miners/freq", setAllMinersFreqVoltHandler)
-		api.POST("/miners/sleep", setAllMinersSleepHandler)
-		api.POST("/miners/start", startAllMinersHandler)
-		api.POST("/miners/shutdown", shutdownAllMinersHandler)
+			// Individual miner control
+			manage.POST("/miner/power", setMinerPowerHandler)
+			manage.POST("/miner/start", startMinerHandler)
+			manage.POST("/miner/shutdown", shutdownMinerHandler)
+
+			// Bulk miner control
+			manage.POST("/miners/power", setAllMinersPowerHandler)
+			manage.POST("/miners/freq", setAllMinersFreqVoltHandler)
+			manage.POST("/miners/sleep", setAllMinersSleepHandler)
+			manage.POST("/miners/start", startAllMinersHandler)
+			manage.POST("/miners/shutdown", shutdownAllMinersHandler)
+		}
 
 		// Machine management
 		api.POST("/machines", addMachineHandler)
@@ -248,8 +293,9 @@ func dashboardHandler(c *gin.Context) {
 	power = math.Round(power)
 
 	data := gin.H{
-		"Title":    "Mining Dashboard",
-		"Machines": machines,
+		"Title":      "Mining Dashboard",
+		"Machines":   machines,
+		"ShowManage": c.GetBool("ShowManage"),
 		"Status": gin.H{
 			"Online": online,
 			"Label":  statusLabel,
@@ -702,7 +748,8 @@ func getManageMinersHandler(c *gin.Context) {
 
 func environmentHandler(c *gin.Context) {
 	data := gin.H{
-		"Title": "Mining Dashboard",
+		"Title":      "Mining Dashboard",
+		"ShowManage": c.GetBool("ShowManage"),
 	}
 	c.HTML(http.StatusOK, "environment.html", data)
 }
@@ -757,8 +804,9 @@ func minersHandler(c *gin.Context) {
 	avgTemp = math.Round(avgTemp*10) / 10
 
 	data := gin.H{
-		"Title":    "Mining Dashboard",
-		"Machines": machines,
+		"Title":      "Mining Dashboard",
+		"Machines":   machines,
+		"ShowManage": c.GetBool("ShowManage"),
 		"Metrics": []gin.H{
 			{"Label": "Active Miners", "Value": activeMiners, "Unit": "online", "Color": "success"},
 			{"Label": "Total Hashrate", "Value": hashrate, "Unit": "TH/s", "Color": "primary"},
@@ -773,24 +821,27 @@ func minersHandler(c *gin.Context) {
 
 func manageHandler(c *gin.Context) {
 	data := gin.H{
-		"Title":    "Mining Dashboard",
-		"Machines": machines,
+		"Title":      "Mining Dashboard",
+		"Machines":   machines,
+		"ShowManage": true,
 	}
 	c.HTML(http.StatusOK, "manage.html", data)
 }
 
 func settingsHandler(c *gin.Context) {
 	data := gin.H{
-		"Title":    "Mining Dashboard",
-		"Machines": machines,
+		"Title":      "Mining Dashboard",
+		"Machines":   machines,
+		"ShowManage": c.GetBool("ShowManage"),
 	}
 	c.HTML(http.StatusOK, "settings.html", data)
 }
 
 func powerMiningHandler(c *gin.Context) {
 	data := gin.H{
-		"Title":    "Mining Dashboard",
-		"Machines": machines,
+		"Title":      "Mining Dashboard",
+		"Machines":   machines,
+		"ShowManage": c.GetBool("ShowManage"),
 		"Status": gin.H{
 			"Online": true,
 			"Label":  "Mining Status",
