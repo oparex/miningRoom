@@ -14,3 +14,4 @@ miningroom.db
 
 # NiceHash credentials (never commit)
 nicehash/config.json
+__pycache__/
