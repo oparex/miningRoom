@@ -113,7 +113,7 @@ func main() {
 	r.GET("/power-mining", powerMiningHandler)
 	r.GET("/environment", environmentHandler)
 	r.GET("/manage", requireInnerNetwork(), manageHandler)
-	r.GET("/settings", settingsHandler)
+	r.GET("/settings", requireInnerNetwork(), settingsHandler)
 
 	// API routes for dashboard data
 	api := r.Group("/api")
@@ -147,11 +147,11 @@ func main() {
 			manage.POST("/miners/sleep", setAllMinersSleepHandler)
 			manage.POST("/miners/start", startAllMinersHandler)
 			manage.POST("/miners/shutdown", shutdownAllMinersHandler)
-		}
 
-		// Machine management
-		api.POST("/machines", addMachineHandler)
-		api.DELETE("/machines/:ip", deleteMachineHandler)
+			// Machine management
+			manage.POST("/machines", addMachineHandler)
+			manage.DELETE("/machines/:ip", deleteMachineHandler)
+		}
 	}
 
 	r.Run(":8080")
@@ -832,7 +832,7 @@ func settingsHandler(c *gin.Context) {
 	data := gin.H{
 		"Title":      "Mining Dashboard",
 		"Machines":   machines,
-		"ShowManage": c.GetBool("ShowManage"),
+		"ShowManage": true,
 	}
 	c.HTML(http.StatusOK, "settings.html", data)
 }
