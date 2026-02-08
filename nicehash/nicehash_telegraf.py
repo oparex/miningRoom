@@ -123,11 +123,14 @@ def fetch_payouts(cfg):
     return lines
 
 
-def fetch_rigs(cfg):
+def fetch_rigs(cfg, group_name=None):
     """Fetch rig status and output as InfluxDB line protocol."""
     lines = []
     try:
-        data = nicehash_request(cfg, "GET", "/main/api/v2/mining/rigs2", "size=50&page=0")
+        query = "size=50&page=0"
+        if group_name:
+            query = f"size=50&page=0&path={group_name}"
+        data = nicehash_request(cfg, "GET", "/main/api/v2/mining/rigs2", query)
         now_ns = int(time.time() * 1e9)
 
         # Total unpaid amount for the whole account
@@ -222,12 +225,17 @@ def main():
         default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json"),
         help="Path to NiceHash config JSON file (default: config.json next to script)",
     )
+    parser.add_argument(
+        "--group-name",
+        default=None,
+        help="Filter rigs by group name (path parameter)",
+    )
     args = parser.parse_args()
 
     cfg = load_config(args.config)
 
     lines = []
-    lines.extend(fetch_rigs(cfg))
+    lines.extend(fetch_rigs(cfg, args.group_name))
     lines.extend(fetch_payouts(cfg))
     lines.extend(fetch_balance(cfg))
 
