@@ -110,7 +110,7 @@ func (c *Client) Query(query string) (*QueryResult, error) {
 // It uses a LATEST ON query to get the most recent reading from each miner/pool combination
 // and sums them together to get the total hashrate.
 func (c *Client) GetTotalHashrate() (*TotalHashrateResult, error) {
-	const query = "SELECT timestamp, sum(hashrate_average) FROM pools LATEST ON timestamp PARTITION BY miner_ip, idx;"
+	const query = "SELECT timestamp, sum(hashrate_average) FROM pools LATEST ON timestamp PARTITION BY miner_ip;"
 
 	result, err := c.Query(query)
 	if err != nil {
@@ -951,6 +951,200 @@ func (c *Client) GetThermalInsulationData() (*ThermalInsulationData, error) {
 	return &ThermalInsulationData{
 		DataPoints: dataPoints,
 		HasData:    len(dataPoints) > 0,
+	}, nil
+}
+
+// TimeSeriesPoint represents a single (timestamp, value) data point.
+type TimeSeriesPoint struct {
+	Timestamp string  `json:"timestamp"`
+	Value     float64 `json:"value"`
+}
+
+// TimeSeriesData holds a simple time series of values.
+type TimeSeriesData struct {
+	Points  []TimeSeriesPoint `json:"points"`
+	HasData bool              `json:"hasData"`
+}
+
+// GetPowerTimeSeries returns total Shelly power sampled every 10 minutes over the last 24 hours.
+func (c *Client) GetPowerTimeSeries() (*TimeSeriesData, error) {
+	const query = `SELECT timestamp, sum(power) as total_power FROM shellies WHERE timestamp > dateadd('h', -24, now()) SAMPLE BY 10m ALIGN TO CALENDAR;`
+
+	result, err := c.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query power time series: %w", err)
+	}
+
+	if result.Count == 0 || len(result.Dataset) == 0 {
+		return &TimeSeriesData{HasData: false}, nil
+	}
+
+	points := make([]TimeSeriesPoint, 0, len(result.Dataset))
+	for _, row := range result.Dataset {
+		if len(row) < 2 {
+			continue
+		}
+		ts, ok := row[0].(string)
+		if !ok {
+			continue
+		}
+		points = append(points, TimeSeriesPoint{
+			Timestamp: ts,
+			Value:     parseFloat(row[1]),
+		})
+	}
+
+	return &TimeSeriesData{
+		Points:  points,
+		HasData: len(points) > 0,
+	}, nil
+}
+
+// GetHashrateTimeSeries returns total hashrate sampled every 10 minutes over the last 24 hours.
+func (c *Client) GetHashrateTimeSeries() (*TimeSeriesData, error) {
+	const query = `SELECT timestamp, sum(hashrate_average) as total_hashrate FROM pools WHERE timestamp > dateadd('h', -24, now()) SAMPLE BY 10m ALIGN TO CALENDAR;`
+
+	result, err := c.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query hashrate time series: %w", err)
+	}
+
+	if result.Count == 0 || len(result.Dataset) == 0 {
+		return &TimeSeriesData{HasData: false}, nil
+	}
+
+	points := make([]TimeSeriesPoint, 0, len(result.Dataset))
+	for _, row := range result.Dataset {
+		if len(row) < 2 {
+			continue
+		}
+		ts, ok := row[0].(string)
+		if !ok {
+			continue
+		}
+		points = append(points, TimeSeriesPoint{
+			Timestamp: ts,
+			Value:     parseFloat(row[1]),
+		})
+	}
+
+	return &TimeSeriesData{
+		Points:  points,
+		HasData: len(points) > 0,
+	}, nil
+}
+
+// MinerHashrateReading represents a single hashrate reading for a miner.
+type MinerHashrateReading struct {
+	Timestamp string  `json:"timestamp"`
+	MinerIP   string  `json:"minerIp"`
+	Hashrate  float64 `json:"hashrate"`
+}
+
+// MinerHashrateChartData holds per-miner hashrate time series.
+type MinerHashrateChartData struct {
+	Miners  map[string][]MinerHashrateReading `json:"miners"`
+	HasData bool                              `json:"hasData"`
+}
+
+// GetPerMinerHashrateTimeSeries returns per-miner hashrate over the last 24 hours.
+func (c *Client) GetPerMinerHashrateTimeSeries() (*MinerHashrateChartData, error) {
+	const query = `SELECT timestamp, miner_ip, sum(hashrate_average) as hashrate FROM pools WHERE timestamp > dateadd('h', -24, now()) GROUP BY timestamp, miner_ip ORDER BY timestamp;`
+
+	result, err := c.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query per-miner hashrate time series: %w", err)
+	}
+
+	if result.Count == 0 || len(result.Dataset) == 0 {
+		return &MinerHashrateChartData{
+			Miners:  make(map[string][]MinerHashrateReading),
+			HasData: false,
+		}, nil
+	}
+
+	miners := make(map[string][]MinerHashrateReading)
+	for _, row := range result.Dataset {
+		if len(row) < 3 {
+			continue
+		}
+		ts, ok := row[0].(string)
+		if !ok {
+			continue
+		}
+		minerIP, ok := row[1].(string)
+		if !ok {
+			continue
+		}
+		miners[minerIP] = append(miners[minerIP], MinerHashrateReading{
+			Timestamp: ts,
+			MinerIP:   minerIP,
+			Hashrate:  parseFloat(row[2]),
+		})
+	}
+
+	return &MinerHashrateChartData{
+		Miners:  miners,
+		HasData: len(miners) > 0,
+	}, nil
+}
+
+// DevicePowerReading represents a single power reading for a Shelly device.
+type DevicePowerReading struct {
+	Timestamp string  `json:"timestamp"`
+	DeviceID  string  `json:"deviceId"`
+	Power     float64 `json:"power"`
+}
+
+// DevicePowerChartData holds per-device power time series.
+type DevicePowerChartData struct {
+	Devices map[string][]DevicePowerReading `json:"devices"`
+	HasData bool                            `json:"hasData"`
+}
+
+// GetPerDevicePowerTimeSeries returns per-device Shelly power over the last 24 hours, sampled every 10 minutes.
+func (c *Client) GetPerDevicePowerTimeSeries() (*DevicePowerChartData, error) {
+	const query = `SELECT timestamp, device_id, avg(power) as power FROM shellies WHERE timestamp > dateadd('h', -24, now()) SAMPLE BY 10m FILL(NULL) ALIGN TO CALENDAR;`
+
+	result, err := c.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query per-device power time series: %w", err)
+	}
+
+	if result.Count == 0 || len(result.Dataset) == 0 {
+		return &DevicePowerChartData{
+			Devices: make(map[string][]DevicePowerReading),
+			HasData: false,
+		}, nil
+	}
+
+	devices := make(map[string][]DevicePowerReading)
+	for _, row := range result.Dataset {
+		if len(row) < 3 {
+			continue
+		}
+		ts, ok := row[0].(string)
+		if !ok {
+			continue
+		}
+		deviceID, ok := row[1].(string)
+		if !ok {
+			continue
+		}
+		power := parseFloat(row[2])
+		if power == 0 {
+			continue // skip NULL-filled gaps
+		}
+		devices[deviceID] = append(devices[deviceID], DevicePowerReading{
+			Timestamp: ts,
+			DeviceID:  deviceID,
+			Power:     power,
+		})
+	}
+
+	return &DevicePowerChartData{
+		Devices: devices,
+		HasData: len(devices) > 0,
 	}, nil
 }
 

@@ -11,3 +11,7 @@ miningroom.db
 
 # OS
 .DS_Store
+
+# NiceHash credentials (never commit)
+nicehash/config.json
+__pycache__/

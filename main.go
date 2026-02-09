@@ -151,6 +151,10 @@ func main() {
 		api.GET("/charts/hourly-temp", getHourlyTempChartHandler)
 		api.GET("/charts/thermal-insulation", getThermalInsulationChartHandler)
 		api.GET("/charts/daily-energy", getDailyEnergyChartHandler)
+		api.GET("/charts/power-total", getPowerTimeSeriesHandler)
+		api.GET("/charts/hashrate-total", getHashrateTimeSeriesHandler)
+		api.GET("/charts/miner-hashrates", getMinerHashrateChartHandler)
+		api.GET("/charts/device-power", getDevicePowerChartHandler)
 		api.GET("/miners/status", getMinerStatusHandler)
 		api.GET("/environment/latest", getEnvironmentLatestHandler)
 
@@ -573,6 +577,62 @@ func getDailyEnergyChartHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
+func getPowerTimeSeriesHandler(c *gin.Context) {
+	result, err := questdbClient.GetPowerTimeSeries()
+	if err != nil {
+		log.Printf("Failed to get power time series from QuestDB: %v", err)
+		c.JSON(http.StatusOK, gin.H{
+			"points":  []interface{}{},
+			"hasData": false,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
+}
+
+func getHashrateTimeSeriesHandler(c *gin.Context) {
+	result, err := questdbClient.GetHashrateTimeSeries()
+	if err != nil {
+		log.Printf("Failed to get hashrate time series from QuestDB: %v", err)
+		c.JSON(http.StatusOK, gin.H{
+			"points":  []interface{}{},
+			"hasData": false,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
+}
+
+func getMinerHashrateChartHandler(c *gin.Context) {
+	result, err := questdbClient.GetPerMinerHashrateTimeSeries()
+	if err != nil {
+		log.Printf("Failed to get per-miner hashrate from QuestDB: %v", err)
+		c.JSON(http.StatusOK, gin.H{
+			"miners":  map[string][]interface{}{},
+			"hasData": false,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
+}
+
+func getDevicePowerChartHandler(c *gin.Context) {
+	result, err := questdbClient.GetPerDevicePowerTimeSeries()
+	if err != nil {
+		log.Printf("Failed to get per-device power from QuestDB: %v", err)
+		c.JSON(http.StatusOK, gin.H{
+			"devices": map[string][]interface{}{},
+			"hasData": false,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
+}
+
 func getEnvironmentLatestHandler(c *gin.Context) {
 	result, err := questdbClient.GetLatestEnvironmentTemperatures()
 	if err != nil {
@@ -866,20 +926,57 @@ func settingsHandler(c *gin.Context) {
 }
 
 func powerMiningHandler(c *gin.Context) {
+	online := false
+	statusLabel := "No Data"
+	hashrate := 0.0
+	power := 0.0
+
+	result, err := questdbClient.GetTotalHashrate()
+	if err != nil {
+		log.Printf("Failed to get hashrate from QuestDB: %v", err)
+	} else if result.HasData {
+		online = isTimestampRecent(result.Timestamp, 5*time.Minute)
+		if online {
+			statusLabel = "Mining"
+		} else {
+			statusLabel = "Stale Data"
+		}
+		hashrate = result.TotalHashrate / 1000 // GH/s to TH/s
+	}
+
+	powerResult, err := questdbClient.GetTotalPower()
+	if err != nil {
+		log.Printf("Failed to get power from QuestDB: %v", err)
+	} else if powerResult.HasData {
+		power = powerResult.TotalPower
+	}
+
+	efficiency := 0.0
+	if hashrate > 0 {
+		efficiency = power / hashrate // J/TH
+	}
+
+	revenue := calculateDailyRevenueEUR(hashrate)
+	elecCost := math.Round(power/1000*24*0.23*100) / 100
+
+	hashrate = math.Round(hashrate)
+	efficiency = math.Round(efficiency*10) / 10
+	power = math.Round(power)
+
 	data := gin.H{
 		"Title":      "Mining Dashboard",
 		"Machines":   machines,
 		"ShowManage": c.GetBool("ShowManage"),
 		"Status": gin.H{
-			"Online": true,
-			"Label":  "Mining Status",
+			"Online": online,
+			"Label":  statusLabel,
 		},
 		"Gauges": []gin.H{
-			{"Label": "Total Power", "Value": 2510, "Unit": "W"},
-			{"Label": "Hashrate", "Value": 375.5, "Unit": "MH/s"},
-			{"Label": "Efficiency", "Value": 0.149, "Unit": "MH/W"},
-			{"Label": "Cost/Day", "Value": 6.02, "Unit": "$"},
-			{"Label": "Revenue/Day", "Value": 12.50, "Unit": "$"},
+			{"Label": "Total Power", "Value": power, "Unit": "W"},
+			{"Label": "Hashrate", "Value": hashrate, "Unit": "TH/s"},
+			{"Label": "Efficiency", "Value": efficiency, "Unit": "J/TH"},
+			{"Label": "Elec. Cost", "Value": elecCost, "Unit": "€/day"},
+			{"Label": "Revenue", "Value": revenue, "Unit": "€/day"},
 		},
 	}
 	c.HTML(http.StatusOK, "power-mining.html", data)
