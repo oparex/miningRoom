@@ -237,6 +237,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
     <script>
         // Sidebar toggle
         document.getElementById('sidebarCollapse').addEventListener('click', function() {
@@ -250,93 +251,153 @@
         updateTime();
         setInterval(updateTime, 1000);
 
-        // Sample chart data - will be replaced with real data
-        const timeLabels = ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '24:00'];
+        const colorPalette = [
+            'rgba(255, 193, 7, 0.8)',
+            'rgba(13, 110, 253, 0.8)',
+            'rgba(25, 135, 84, 0.8)',
+            'rgba(220, 53, 69, 0.8)',
+            'rgba(13, 202, 240, 0.8)',
+            'rgba(111, 66, 193, 0.8)',
+        ];
 
-        // Power Consumption Chart
-        new Chart(document.getElementById('powerConsumptionChart'), {
-            type: 'line',
-            data: {
-                labels: timeLabels,
-                datasets: [{
-                    label: 'Power (W)',
-                    data: [2400, 2450, 2500, 2480, 2520, 2490, 2510],
+        function parseTs(ts) {
+            return new Date(ts.endsWith('Z') ? ts : ts + 'Z');
+        }
+
+        function makeTimeSeriesChart(canvasId, yLabel) {
+            return new Chart(document.getElementById(canvasId), {
+                type: 'line',
+                data: { datasets: [] },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false }, title: { display: false } },
+                    scales: {
+                        x: { type: 'time', display: false },
+                        y: { title: { display: true, text: yLabel }, grace: '10%' }
+                    }
+                }
+            });
+        }
+
+        // Chart 1: Total Power Consumption
+        const powerChart = makeTimeSeriesChart('powerConsumptionChart', 'W');
+
+        async function loadPowerChart() {
+            try {
+                const resp = await fetch('/api/charts/power-total');
+                const data = await resp.json();
+                if (!data.hasData || !data.points) return;
+                powerChart.data.datasets = [{
+                    label: 'Total Power',
+                    data: data.points.map(p => ({ x: parseTs(p.timestamp), y: p.value })),
                     borderColor: 'rgb(255, 193, 7)',
                     backgroundColor: 'rgba(255, 193, 7, 0.1)',
-                    fill: true,
-                    tension: 0.4
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false } }
-            }
-        });
+                    fill: true, tension: 0.4, pointRadius: 0, borderWidth: 2
+                }];
+                powerChart.update();
+            } catch (e) { console.error('Failed to load power chart:', e); }
+        }
 
-        // Hashrate Chart
-        new Chart(document.getElementById('hashrateChart'), {
-            type: 'line',
-            data: {
-                labels: timeLabels,
-                datasets: [{
-                    label: 'Hashrate (MH/s)',
-                    data: [370, 375, 380, 372, 378, 376, 375],
+        // Chart 2: Total Hashrate
+        const hashrateChart = makeTimeSeriesChart('hashrateChart', 'GH/s');
+
+        async function loadHashrateChart() {
+            try {
+                const resp = await fetch('/api/charts/hashrate-total');
+                const data = await resp.json();
+                if (!data.hasData || !data.points) return;
+                hashrateChart.data.datasets = [{
+                    label: 'Total Hashrate',
+                    data: data.points.map(p => ({ x: parseTs(p.timestamp), y: p.value })),
                     borderColor: 'rgb(13, 110, 253)',
                     backgroundColor: 'rgba(13, 110, 253, 0.1)',
-                    fill: true,
-                    tension: 0.4
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false } }
-            }
-        });
+                    fill: true, tension: 0.4, pointRadius: 0, borderWidth: 2
+                }];
+                hashrateChart.update();
+            } catch (e) { console.error('Failed to load hashrate chart:', e); }
+        }
 
-        // Efficiency Chart
-        new Chart(document.getElementById('efficiencyChart'), {
-            type: 'line',
-            data: {
-                labels: timeLabels,
-                datasets: [{
-                    label: 'Efficiency (MH/W)',
-                    data: [0.154, 0.153, 0.152, 0.150, 0.150, 0.151, 0.149],
+        // Chart 3: Mining Efficiency (J/TH)
+        const efficiencyChart = makeTimeSeriesChart('efficiencyChart', 'J/TH');
+
+        async function loadEfficiencyChart() {
+            try {
+                const [powerResp, hashrateResp] = await Promise.all([
+                    fetch('/api/charts/power-total'),
+                    fetch('/api/charts/hashrate-total')
+                ]);
+                const powerData = await powerResp.json();
+                const hashrateData = await hashrateResp.json();
+                if (!powerData.hasData || !hashrateData.hasData) return;
+
+                const hashrateMap = {};
+                for (const p of hashrateData.points) {
+                    hashrateMap[p.timestamp] = p.value;
+                }
+
+                const points = [];
+                for (const p of powerData.points) {
+                    const hr = hashrateMap[p.timestamp];
+                    if (hr && hr > 0) {
+                        const hashrateTH = hr / 1000;
+                        points.push({ x: parseTs(p.timestamp), y: Math.round(p.value / hashrateTH * 10) / 10 });
+                    }
+                }
+
+                efficiencyChart.data.datasets = [{
+                    label: 'Efficiency',
+                    data: points,
                     borderColor: 'rgb(25, 135, 84)',
                     backgroundColor: 'rgba(25, 135, 84, 0.1)',
-                    fill: true,
-                    tension: 0.4
-                }]
-            },
+                    fill: true, tension: 0.4, pointRadius: 0, borderWidth: 2
+                }];
+                efficiencyChart.update();
+            } catch (e) { console.error('Failed to load efficiency chart:', e); }
+        }
+
+        // Chart 4: Power per Miner (bar chart from latest Shelly readings)
+        let powerPerMinerChart = new Chart(document.getElementById('powerPerMinerChart'), {
+            type: 'bar',
+            data: { labels: [], datasets: [] },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                plugins: { legend: { display: false } }
+                plugins: { legend: { display: false } },
+                scales: { y: { beginAtZero: true, title: { display: true, text: 'W' } } }
             }
         });
 
-        // Power per Miner Chart
-        new Chart(document.getElementById('powerPerMinerChart'), {
-            type: 'bar',
-            data: {
-                labels: ['Rig-01', 'Rig-02', 'Rig-03'],
-                datasets: [{
+        async function loadPowerPerMinerChart() {
+            try {
+                const resp = await fetch('/api/miners/status');
+                const data = await resp.json();
+                if (!data.hasData || !data.miners) return;
+
+                const labels = data.miners.map(m => m.name || m.minerIp);
+                const values = data.miners.map(m => m.power);
+                const colors = labels.map((_, i) => colorPalette[i % colorPalette.length]);
+
+                powerPerMinerChart.data.labels = labels;
+                powerPerMinerChart.data.datasets = [{
                     label: 'Power (W)',
-                    data: [850, 820, 840],
-                    backgroundColor: [
-                        'rgba(255, 193, 7, 0.8)',
-                        'rgba(13, 110, 253, 0.8)',
-                        'rgba(25, 135, 84, 0.8)'
-                    ]
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false } }
-            }
-        });
+                    data: values,
+                    backgroundColor: colors,
+                    borderRadius: 4
+                }];
+                powerPerMinerChart.update();
+            } catch (e) { console.error('Failed to load power per miner:', e); }
+        }
+
+        // Load 2x2 charts
+        loadPowerChart();
+        loadHashrateChart();
+        loadEfficiencyChart();
+        loadPowerPerMinerChart();
+        setInterval(loadPowerChart, 5 * 60 * 1000);
+        setInterval(loadHashrateChart, 5 * 60 * 1000);
+        setInterval(loadEfficiencyChart, 5 * 60 * 1000);
+        setInterval(loadPowerPerMinerChart, 60 * 1000);
 
         // Thermal Insulation Chart
         let thermalChart = null;

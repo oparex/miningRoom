@@ -120,62 +120,35 @@
                         </div>
                     </div>
 
-                    <!-- Chart 2: Power Consumption -->
+                    <!-- Chart 2: Hashrate per Miner -->
                     <div class="col-lg-6 mb-4">
                         <div class="card shadow-sm h-100">
                             <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                                <h6 class="mb-0"><i class="bi bi-lightning-charge me-2"></i>Power Consumption</h6>
-                                <div class="dropdown">
-                                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                                        Options
-                                    </button>
-                                    <ul class="dropdown-menu dropdown-menu-end">
-                                        <li><a class="dropdown-item" href="#">Refresh</a></li>
-                                        <li><a class="dropdown-item" href="#">Export</a></li>
-                                    </ul>
-                                </div>
+                                <h6 class="mb-0"><i class="bi bi-graph-up-arrow me-2"></i>Hashrate per Miner</h6>
                             </div>
                             <div class="card-body">
-                                <canvas id="powerChart"></canvas>
+                                <canvas id="minerHashrateChart"></canvas>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Chart 3: Temperature -->
+                    <!-- Chart 3: Power per Device -->
                     <div class="col-lg-6 mb-4">
                         <div class="card shadow-sm h-100">
                             <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                                <h6 class="mb-0"><i class="bi bi-thermometer-half me-2"></i>Temperature</h6>
-                                <div class="dropdown">
-                                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                                        Options
-                                    </button>
-                                    <ul class="dropdown-menu dropdown-menu-end">
-                                        <li><a class="dropdown-item" href="#">Refresh</a></li>
-                                        <li><a class="dropdown-item" href="#">Export</a></li>
-                                    </ul>
-                                </div>
+                                <h6 class="mb-0"><i class="bi bi-lightning-charge me-2"></i>Power per Device</h6>
                             </div>
                             <div class="card-body">
-                                <canvas id="tempChart"></canvas>
+                                <canvas id="devicePowerChart"></canvas>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Chart 4: Efficiency -->
+                    <!-- Chart 4: Efficiency (J/TH) -->
                     <div class="col-lg-6 mb-4">
                         <div class="card shadow-sm h-100">
                             <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                                <h6 class="mb-0"><i class="bi bi-speedometer me-2"></i>Efficiency</h6>
-                                <div class="dropdown">
-                                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                                        Options
-                                    </button>
-                                    <ul class="dropdown-menu dropdown-menu-end">
-                                        <li><a class="dropdown-item" href="#">Refresh</a></li>
-                                        <li><a class="dropdown-item" href="#">Export</a></li>
-                                    </ul>
-                                </div>
+                                <h6 class="mb-0"><i class="bi bi-speedometer me-2"></i>Efficiency (J/TH)</h6>
                             </div>
                             <div class="card-body">
                                 <canvas id="efficiencyChart"></canvas>
@@ -203,25 +176,7 @@
         updateTime();
         setInterval(updateTime, 1000);
 
-        // Placeholder charts - will be replaced with real data
-        const chartConfig = {
-            type: 'line',
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false }
-                },
-                scales: {
-                    y: { beginAtZero: true }
-                }
-            }
-        };
-
-        const labels = ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '24:00'];
-
-        // Miner Temperature Chart (real data)
-        const minerColorPalette = [
+        const colorPalette = [
             { border: 'rgba(13, 110, 253, 1)', background: 'rgba(13, 110, 253, 0.2)' },
             { border: 'rgba(25, 135, 84, 1)', background: 'rgba(25, 135, 84, 0.2)' },
             { border: 'rgba(255, 193, 7, 1)', background: 'rgba(255, 193, 7, 0.2)' },
@@ -230,19 +185,28 @@
             { border: 'rgba(111, 66, 193, 1)', background: 'rgba(111, 66, 193, 0.2)' },
         ];
 
-        const minerTempChart = new Chart(document.getElementById('minerTempChart'), {
-            type: 'line',
-            data: { datasets: [] },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false }, title: { display: false } },
-                scales: {
-                    x: { type: 'time', display: false },
-                    y: { title: { display: true, text: '°C' }, grace: '10%' }
+        function parseTs(ts) {
+            return new Date(ts.endsWith('Z') ? ts : ts + 'Z');
+        }
+
+        function makeTimeSeriesChart(canvasId, yLabel) {
+            return new Chart(document.getElementById(canvasId), {
+                type: 'line',
+                data: { datasets: [] },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: true, position: 'top' }, title: { display: false } },
+                    scales: {
+                        x: { type: 'time', display: false },
+                        y: { title: { display: true, text: yLabel }, grace: '10%' }
+                    }
                 }
-            }
-        });
+            });
+        }
+
+        // Chart 1: Miner Temperature
+        const minerTempChart = makeTimeSeriesChart('minerTempChart', '°C');
 
         async function loadMinerTemperatureChart() {
             try {
@@ -253,27 +217,20 @@
                 const datasets = [];
                 let colorIndex = 0;
                 for (const [minerIp, readings] of Object.entries(data.miners)) {
-                    const color = minerColorPalette[colorIndex % minerColorPalette.length];
-                    const parseTs = ts => new Date(ts.endsWith('Z') ? ts : ts + 'Z');
+                    const color = colorPalette[colorIndex % colorPalette.length];
                     datasets.push({
                         label: minerIp + ' T0',
                         data: readings.map(r => ({ x: parseTs(r.timestamp), y: r.temp0 })),
                         borderColor: color.border,
                         backgroundColor: color.background,
-                        fill: false,
-                        tension: 0.4,
-                        pointRadius: 0,
-                        borderWidth: 2
+                        fill: false, tension: 0.4, pointRadius: 0, borderWidth: 2
                     });
                     datasets.push({
                         label: minerIp + ' T1',
                         data: readings.map(r => ({ x: parseTs(r.timestamp), y: r.temp1 })),
                         borderColor: color.border,
                         backgroundColor: color.background,
-                        fill: false,
-                        tension: 0.4,
-                        pointRadius: 0,
-                        borderWidth: 2,
+                        fill: false, tension: 0.4, pointRadius: 0, borderWidth: 2,
                         borderDash: [5, 3]
                     });
                     colorIndex++;
@@ -284,56 +241,117 @@
                 console.error('Failed to load miner temperature chart:', error);
             }
         }
-        loadMinerTemperatureChart();
-        setInterval(loadMinerTemperatureChart, 5 * 60 * 1000);
 
-        // Power Chart
-        new Chart(document.getElementById('powerChart'), {
-            ...chartConfig,
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Power',
-                    data: [850, 860, 855, 870, 880, 865, 850],
-                    borderColor: '#ffc107',
-                    backgroundColor: 'rgba(255, 193, 7, 0.1)',
-                    fill: true,
-                    tension: 0.4
-                }]
+        // Chart 2: Hashrate per Miner
+        const minerHashrateChart = makeTimeSeriesChart('minerHashrateChart', 'GH/s');
+
+        async function loadMinerHashrateChart() {
+            try {
+                const response = await fetch('/api/charts/miner-hashrates');
+                const data = await response.json();
+                if (!data.hasData || !data.miners) return;
+
+                const datasets = [];
+                let colorIndex = 0;
+                for (const [minerIp, readings] of Object.entries(data.miners)) {
+                    const color = colorPalette[colorIndex % colorPalette.length];
+                    datasets.push({
+                        label: minerIp,
+                        data: readings.map(r => ({ x: parseTs(r.timestamp), y: r.hashrate })),
+                        borderColor: color.border,
+                        backgroundColor: color.background,
+                        fill: false, tension: 0.4, pointRadius: 0, borderWidth: 2
+                    });
+                    colorIndex++;
+                }
+                minerHashrateChart.data.datasets = datasets;
+                minerHashrateChart.update();
+            } catch (error) {
+                console.error('Failed to load miner hashrate chart:', error);
             }
-        });
+        }
 
-        // Temperature Chart
-        new Chart(document.getElementById('tempChart'), {
-            ...chartConfig,
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Temperature',
-                    data: [62, 65, 68, 70, 72, 68, 65],
-                    borderColor: '#dc3545',
-                    backgroundColor: 'rgba(220, 53, 69, 0.1)',
-                    fill: true,
-                    tension: 0.4
-                }]
+        // Chart 3: Power per Device
+        const devicePowerChart = makeTimeSeriesChart('devicePowerChart', 'W');
+
+        async function loadDevicePowerChart() {
+            try {
+                const response = await fetch('/api/charts/device-power');
+                const data = await response.json();
+                if (!data.hasData || !data.devices) return;
+
+                const datasets = [];
+                let colorIndex = 0;
+                for (const [deviceId, readings] of Object.entries(data.devices)) {
+                    const color = colorPalette[colorIndex % colorPalette.length];
+                    datasets.push({
+                        label: deviceId,
+                        data: readings.map(r => ({ x: parseTs(r.timestamp), y: r.power })),
+                        borderColor: color.border,
+                        backgroundColor: color.background,
+                        fill: false, tension: 0.4, pointRadius: 0, borderWidth: 2
+                    });
+                    colorIndex++;
+                }
+                devicePowerChart.data.datasets = datasets;
+                devicePowerChart.update();
+            } catch (error) {
+                console.error('Failed to load device power chart:', error);
             }
-        });
+        }
 
-        // Efficiency Chart
-        new Chart(document.getElementById('efficiencyChart'), {
-            ...chartConfig,
-            data: {
-                labels: labels,
-                datasets: [{
+        // Chart 4: Efficiency (J/TH) - computed from total power and hashrate
+        const efficiencyChart = makeTimeSeriesChart('efficiencyChart', 'J/TH');
+
+        async function loadEfficiencyChart() {
+            try {
+                const [powerResp, hashrateResp] = await Promise.all([
+                    fetch('/api/charts/power-total'),
+                    fetch('/api/charts/hashrate-total')
+                ]);
+                const powerData = await powerResp.json();
+                const hashrateData = await hashrateResp.json();
+
+                if (!powerData.hasData || !hashrateData.hasData) return;
+
+                // Build hashrate lookup by timestamp
+                const hashrateMap = {};
+                for (const p of hashrateData.points) {
+                    hashrateMap[p.timestamp] = p.value;
+                }
+
+                // Compute efficiency at each power timestamp where hashrate is available
+                const points = [];
+                for (const p of powerData.points) {
+                    const hr = hashrateMap[p.timestamp];
+                    if (hr && hr > 0) {
+                        const hashrateTH = hr / 1000; // GH/s to TH/s
+                        points.push({ x: parseTs(p.timestamp), y: Math.round(p.value / hashrateTH * 10) / 10 });
+                    }
+                }
+
+                efficiencyChart.data.datasets = [{
                     label: 'Efficiency',
-                    data: [0.141, 0.145, 0.143, 0.147, 0.148, 0.147, 0.147],
-                    borderColor: '#198754',
+                    data: points,
+                    borderColor: 'rgba(25, 135, 84, 1)',
                     backgroundColor: 'rgba(25, 135, 84, 0.1)',
-                    fill: true,
-                    tension: 0.4
-                }]
+                    fill: true, tension: 0.4, pointRadius: 0, borderWidth: 2
+                }];
+                efficiencyChart.update();
+            } catch (error) {
+                console.error('Failed to load efficiency chart:', error);
             }
-        });
+        }
+
+        // Load all charts
+        loadMinerTemperatureChart();
+        loadMinerHashrateChart();
+        loadDevicePowerChart();
+        loadEfficiencyChart();
+        setInterval(loadMinerTemperatureChart, 5 * 60 * 1000);
+        setInterval(loadMinerHashrateChart, 5 * 60 * 1000);
+        setInterval(loadDevicePowerChart, 5 * 60 * 1000);
+        setInterval(loadEfficiencyChart, 5 * 60 * 1000);
     </script>
 </body>
 </html>
