@@ -61,11 +61,24 @@ func networkContextMiddleware() gin.HandlerFunc {
 func requireInnerNetwork() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if !isInnerNetwork(c.ClientIP()) {
-			c.AbortWithStatus(http.StatusNotFound)
+			render404(c)
 			return
 		}
 		c.Next()
 	}
+}
+
+// render404 responds with a styled 404 page for browsers or a JSON body for API calls.
+func render404(c *gin.Context) {
+	if strings.HasPrefix(c.Request.URL.Path, "/api/") {
+		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": "not found"})
+		return
+	}
+	c.HTML(http.StatusNotFound, "404.html", gin.H{
+		"Title":      "Mining Dashboard",
+		"ShowManage": c.GetBool("ShowManage"),
+	})
+	c.Abort()
 }
 
 func main() {
@@ -153,6 +166,11 @@ func main() {
 			manage.DELETE("/machines/:ip", deleteMachineHandler)
 		}
 	}
+
+	// Catch-all 404 handler
+	r.NoRoute(func(c *gin.Context) {
+		render404(c)
+	})
 
 	r.Run(":8080")
 }
