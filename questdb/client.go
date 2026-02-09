@@ -110,7 +110,7 @@ func (c *Client) Query(query string) (*QueryResult, error) {
 // It uses a LATEST ON query to get the most recent reading from each miner/pool combination
 // and sums them together to get the total hashrate.
 func (c *Client) GetTotalHashrate() (*TotalHashrateResult, error) {
-	const query = "SELECT timestamp, sum(hashrate_average) FROM pools LATEST ON timestamp PARTITION BY miner_ip, idx;"
+	const query = "SELECT timestamp, sum(hashrate_average) FROM pools LATEST ON timestamp PARTITION BY miner_ip;"
 
 	result, err := c.Query(query)
 	if err != nil {
