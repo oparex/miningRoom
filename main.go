@@ -30,15 +30,15 @@ var (
 	questdbClient *questdb.Client
 	minerUser     string
 	minerPass     string
+	innerNetwork  *net.IPNet
 )
 
-var innerNetwork = func() *net.IPNet {
-	_, n, _ := net.ParseCIDR("10.0.0.0/24")
-	return n
-}()
-
-// isInnerNetwork returns true if the client IP is on the inner network (10.0.0.0/24) or localhost.
+// isInnerNetwork returns true if network filtering is disabled or the client IP
+// is on the inner network or localhost.
 func isInnerNetwork(clientIP string) bool {
+	if innerNetwork == nil {
+		return true
+	}
 	ip := net.ParseIP(clientIP)
 	if ip == nil {
 		return false
@@ -85,9 +85,19 @@ func main() {
 	dbPath := flag.String("db-path", "miningroom.db", "SQLite database path")
 	questdbHost := flag.String("questdb-host", "localhost", "QuestDB host for metrics")
 	questdbPort := flag.Int("questdb-port", 9001, "QuestDB port")
+	innerNet := flag.String("inner-network", "", "CIDR of the inner network that may access manage/settings (e.g. 10.0.0.0/24). If empty, all clients have full access")
 	flag.StringVar(&minerUser, "miner-user", "root", "Miner HTTP digest auth username")
 	flag.StringVar(&minerPass, "miner-pass", "root", "Miner HTTP digest auth password")
 	flag.Parse()
+
+	if *innerNet != "" {
+		_, cidr, err := net.ParseCIDR(*innerNet)
+		if err != nil {
+			log.Fatalf("Invalid --inner-network CIDR %q: %v", *innerNet, err)
+		}
+		innerNetwork = cidr
+		log.Printf("Network access control enabled: manage/settings restricted to %s", *innerNet)
+	}
 
 	log.Printf("Using QuestDB at %s:%d", *questdbHost, *questdbPort)
 	questdbClient = questdb.NewClient(*questdbHost, *questdbPort)
