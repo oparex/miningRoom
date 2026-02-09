@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 NiceHash API poller for Telegraf exec input.
 
